@@ -19,7 +19,6 @@ class OpenAIProvider:
         return ChatOpenAI(
             model=self.config.model,
             temperature=self.config.temperature,
-            seed=self.config.seed,
         )
 
 

@@ -21,7 +21,6 @@ class GeminiProvider:
             temperature=self.config.temperature,
             top_p=self.config.top_p,
             top_k=self.config.top_k,
-            seed=self.config.seed,
         )
 
 

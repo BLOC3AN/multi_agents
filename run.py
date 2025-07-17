@@ -7,7 +7,7 @@ import logging
 
 
 from src.config.settings import config
-from graph import create_agent_graph
+from graph import create_agent_graph, create_initial_state
 
 
 def setup_logging():
@@ -33,16 +33,11 @@ def process_input(user_input: str) -> dict:
         Dictionary containing the processing result
     """
     try:
-        # Create the agent graph
+        # Create the enhanced parallel agent graph
         graph = create_agent_graph()
 
-        # Create initial state
-        initial_state = {
-            "input": user_input,
-            "intent": None,
-            "result": None,
-            "error": None
-        }
+        # Create initial state for enhanced system
+        initial_state = create_initial_state(user_input)
 
         # Process through the graph
         final_state = graph.invoke(initial_state)
@@ -53,9 +48,13 @@ def process_input(user_input: str) -> dict:
         logging.error(f"Error processing input: {str(e)}")
         return {
             "input": user_input,
-            "intent": None,
-            "result": None,
-            "error": f"System error: {str(e)}"
+            "detected_intents": None,
+            "primary_intent": None,
+            "agent_results": None,
+            "final_result": None,
+            "errors": [f"System error: {str(e)}"],
+            "processing_mode": None,
+            "execution_summary": None
         }
 
 
@@ -79,12 +78,21 @@ def interactive_mode():
             print("🔄 Processing...")
             result = process_input(user_input)
 
-            print(f"\n🎯 Intent: {result.get('intent', 'Unknown')}")
+            # Display enhanced results
+            print(f"\n🎯 Primary Intent: {result.get('primary_intent', 'Unknown')}")
+            print(f"🔄 Processing Mode: {result.get('processing_mode', 'Unknown')}")
 
-            if result.get('error'):
-                print(f"❌ Error: {result['error']}")
-            elif result.get('result'):
-                print(f"✅ Result:\n{result['result']}")
+            # Show detected intents if multiple
+            detected_intents = result.get('detected_intents', [])
+            if detected_intents and len(detected_intents) > 1:
+                intents_str = ", ".join([f"{i.intent}({i.confidence:.2f})" for i in detected_intents])
+                print(f"🎪 Multiple Intents: {intents_str}")
+
+            # Show final result
+            if result.get('errors') and len(result.get('errors', [])) > 0:
+                print(f"❌ Errors: {', '.join(result['errors'])}")
+            elif result.get('final_result'):
+                print(f"✅ Result:\n{result['final_result']}")
             else:
                 print("⚠️  No result generated")
 
@@ -105,13 +113,14 @@ def main():
         result = process_input(user_input)
 
         print(f"Input: {result['input']}")
-        print(f"Intent: {result.get('intent', 'Unknown')}")
+        print(f"Primary Intent: {result.get('primary_intent', 'Unknown')}")
+        print(f"Processing Mode: {result.get('processing_mode', 'Unknown')}")
 
-        if result.get('error'):
-            print(f"Error: {result['error']}")
+        if result.get('errors') and len(result.get('errors', [])) > 0:
+            print(f"Errors: {', '.join(result['errors'])}")
             sys.exit(1)
-        elif result.get('result'):
-            print(f"Result: {result['result']}")
+        elif result.get('final_result'):
+            print(f"Result: {result['final_result']}")
         else:
             print("No result generated")
             sys.exit(1)

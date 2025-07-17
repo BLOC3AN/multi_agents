@@ -1,37 +1,61 @@
-# Multi-Agent System
+# Multi-Agent System with Parallel Execution
 
-A clean and simple multi-agent system built with LangGraph that routes user input to specialized agents based on intent classification.
+A clean and intelligent multi-agent system built with LangGraph that supports both single and parallel agent execution based on multi-intent detection.
 
-## Features
+## 🚀 Key Features
 
-- **Intent Classification**: Automatically routes input to appropriate agents
-- **Specialized Agents**: 
-  - Math Agent: Solves mathematical problems
-  - English Agent: Explains concepts in English
-  - Poem Agent: Creates poetry based on input
-- **Multiple LLM Providers**: Support for Gemini and OpenAI
-- **Clean Architecture**: Modular design with dependency injection
-- **Error Handling**: Comprehensive error handling and logging
-- **Configuration Management**: Environment-based configuration
+### 🧠 **Intelligent Intent Detection**
+- **LLM-Powered Classification**: Uses AI to detect user intents instead of rule-based matching
+- **Multi-Intent Support**: Automatically detects multiple intents in a single input
+- **Confidence Scoring**: Each intent comes with confidence scores for better decision making
 
-## Architecture
+### ⚡ **Parallel Execution**
+- **Automatic Mode Selection**: Switches between single and parallel mode based on detected intents
+- **Concurrent Processing**: Runs multiple agents simultaneously using ThreadPoolExecutor
+- **Smart Result Aggregation**: LLM intelligently combines results from multiple agents
 
+### 🎯 **Specialized Agents**
+- **Math Agent**: Solves mathematical problems and equations
+- **English Agent**: Explains concepts, provides definitions, and answers questions
+- **Poem Agent**: Creates poetry and creative writing based on input
+
+### 🏗️ **Clean Architecture**
+- **Modular Design**: Separation of concerns with clear component boundaries
+- **Dependency Injection**: Flexible and testable architecture
+- **Factory Patterns**: Easy extensibility for new LLM providers and agents
+- **Error Resilience**: Comprehensive error handling and fallback mechanisms
+
+## 🏛️ Architecture
+
+### **Enhanced Parallel Processing Flow**
+```
+Input → Intent Classification → Mode Selection → Agent Execution → Result Aggregation → Output
+         (Multi-Intent AI)      (Single/Parallel)   (Concurrent)      (LLM-Powered)
+```
+
+### **Project Structure**
 ```
 src/
-├── core/                 # Core functionality
-│   ├── types.py         # Shared types and data structures
-│   ├── base_agent.py    # Base agent class
-│   └── intent_classifier.py  # Intent classification logic
-├── agents/              # Specialized agents
-│   ├── math_agent.py    # Mathematical problem solving
-│   ├── english_agent.py # English explanations
-│   └── poem_agent.py    # Poetry creation
-├── llms/                # LLM providers
-│   ├── llm_factory.py   # LLM factory pattern
-│   ├── gemini.py        # Gemini provider
-│   └── openai.py        # OpenAI provider
-└── config/              # Configuration management
-    └── settings.py      # Application settings
+├── core/                      # Core functionality
+│   ├── types.py              # Enhanced types with multi-intent support
+│   ├── base_agent.py         # Base agent class with dependency injection
+│   ├── intent_classifier.py  # LLM-powered multi-intent classification
+│   ├── parallel_orchestrator.py  # Parallel execution coordinator
+│   └── result_aggregator.py  # Intelligent result combination
+├── agents/                    # Specialized agents
+│   ├── math_agent.py         # Mathematical problem solving
+│   ├── english_agent.py      # Concept explanations and Q&A
+│   ├── poem_agent.py         # Creative writing and poetry
+│   └── context_agent.py      # Legacy compatibility layer
+├── llms/                      # LLM provider abstraction
+│   ├── llm_factory.py        # Factory pattern for LLM creation
+│   ├── gemini.py             # Google Gemini provider
+│   └── openai.py             # OpenAI provider
+├── config/                    # Configuration management
+│   └── settings.py           # Environment-based settings
+└── tests/                     # Comprehensive test suite
+    ├── test_intent_classifier.py
+    └── test_llm_factory.py
 ```
 
 ## Installation
@@ -53,86 +77,216 @@ cp .env.example .env
 # Edit .env with your API keys
 ```
 
-## Usage
+## 🚀 Usage
 
-### Interactive Mode
+### **Interactive Mode**
 ```bash
 python run.py
 ```
+Experience the full interactive chat interface with real-time intent detection and parallel processing.
 
-### Single Command
+### **Single Command Mode**
 ```bash
+# Single intent example
 python run.py "Solve this equation: 2x + 5 = 11"
+
+# Multi-intent example (triggers parallel mode)
+python run.py "Explain machine learning and solve 2x + 5 = 11"
+python run.py "Write a poem about AI and calculate 10 + 15"
 ```
 
-### Programmatic Usage
+### **Programmatic Usage**
 ```python
-from graph import create_agent_graph
+from graph import create_agent_graph, create_initial_state
 
+# Create the enhanced parallel graph
 graph = create_agent_graph()
-result = graph.invoke({
-    "input": "Write a poem about nature",
-    "intent": None,
-    "result": None,
-    "error": None
-})
 
-print(result["result"])
+# Single intent processing
+result = graph.invoke(create_initial_state("Solve 2x + 3 = 7"))
+print(f"Mode: {result['processing_mode']}")  # "single"
+print(f"Result: {result['final_result']}")
+
+# Multi-intent processing (automatic parallel mode)
+result = graph.invoke(create_initial_state("Explain AI and write a poem about robots"))
+print(f"Mode: {result['processing_mode']}")  # "parallel"
+print(f"Intents: {[i.intent for i in result['detected_intents']]}")  # ["english", "poem"]
+print(f"Result: {result['final_result']}")
 ```
 
-## Configuration
+### **Example Outputs**
 
-The system uses environment variables for configuration:
+**Single Intent:**
+```
+🎯 Primary Intent: math
+🔄 Processing Mode: single
+✅ Result: [Mathematical solution...]
+```
 
-- `LLM_PROVIDER`: Choose between "gemini" or "openai"
-- `LLM_MODEL`: Model name (e.g., "gemini-2.0-flash")
-- `LLM_TEMPERATURE`: Temperature for text generation (0.0-1.0)
-- `GOOGLE_API_KEY`: Required for Gemini
-- `OPENAI_API_KEY`: Required for OpenAI
-- `DEBUG`: Enable debug logging
+**Multi-Intent (Parallel):**
+```
+🎯 Primary Intent: english
+🔄 Processing Mode: parallel
+🎪 Multiple Intents: english(0.85), math(0.78)
+✅ Result: [Combined intelligent response...]
+📊 Thông tin xử lý: 🔄 Xử lý song song: 2 agents | ✅ Thành công: 2 | ⏱️ Thời gian: 8.15s
+```
 
-## Adding New Agents
+## ⚙️ Configuration
 
-1. Create a new agent class inheriting from `BaseAgent`:
+### **Environment Variables**
+```bash
+# LLM Provider Configuration
+LLM_PROVIDER=gemini                    # "gemini" or "openai"
+LLM_MODEL=gemini-2.0-flash            # Model name
+LLM_TEMPERATURE=0.2                   # Temperature for text generation (0.0-1.0)
+LLM_TOP_P=0.2                         # Top-p sampling parameter
+LLM_TOP_K=40                          # Top-k sampling parameter
+
+# API Keys
+GOOGLE_API_KEY=your_google_api_key    # Required for Gemini
+OPENAI_API_KEY=your_openai_api_key    # Required for OpenAI
+
+# Application Settings
+DEBUG=false                           # Enable debug logging
+```
+
+### **Parallel Execution Configuration**
+The system automatically configures parallel execution with sensible defaults:
+- **Max Concurrent Agents**: 3
+- **Timeout**: 30 seconds
+- **Confidence Threshold**: 0.3 (minimum confidence to include an intent)
+- **Intelligent Aggregation**: Enabled by default
+
+## 🔧 Extending the System
+
+### **Adding New Agents**
+
+1. **Create Agent Class**:
 ```python
 from src.core.base_agent import BaseAgent
 
-class MyAgent(BaseAgent):
+class ScienceAgent(BaseAgent):
     def get_agent_name(self) -> str:
-        return "MyAgent"
-    
+        return "ScienceAgent"
+
     def get_prompt(self, user_input: str) -> str:
-        return f"Process this: {user_input}"
+        return f"Explain this scientific concept: {user_input}"
 ```
 
-2. Add intent keywords to `IntentClassifier`
-3. Update the graph routing logic
-
-## Adding New LLM Providers
-
-1. Create a provider class:
+2. **Register with Orchestrator**:
 ```python
-class MyLLMProvider:
+# In graph.py
+parallel_orchestrator.register_agent("science", lambda: ScienceAgent(llm_factory))
+```
+
+3. **Update Intent Classification**:
+The LLM-powered classifier will automatically learn to detect new intent types. You can also enhance the manual extraction fallback in `_extract_intents_manually()`.
+
+### **Adding New LLM Providers**
+
+1. **Create Provider Class**:
+```python
+from src.config.settings import LLMConfig
+
+class ClaudeProvider:
     def __init__(self, config: LLMConfig):
         self.config = config
-    
+
     def create_llm(self):
-        # Return your LLM instance
-        pass
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(
+            model=self.config.model,
+            temperature=self.config.temperature
+        )
 ```
 
-2. Register in `LLMFactory`:
+2. **Register Provider**:
 ```python
-factory.register_provider("myllm", MyLLMProvider)
+# In llm_factory.py
+self._providers["claude"] = ClaudeProvider
 ```
 
-## Testing
+### **Customizing Parallel Execution**
 
-Run tests with:
+```python
+from src.core.types import ParallelExecutionConfig
+
+custom_config = ParallelExecutionConfig(
+    max_concurrent_agents=5,
+    timeout_seconds=60.0,
+    confidence_threshold=0.2,
+    require_primary_intent=False
+)
+
+orchestrator = ParallelOrchestrator(llm_factory, custom_config)
+```
+
+## 🧪 Testing
+
+### **Run All Tests**
 ```bash
-python -m pytest tests/
+python -m pytest tests/ -v
 ```
 
-## License
+### **Test Specific Components**
+```bash
+# Test intent classification
+python -m pytest tests/test_intent_classifier.py -v
+
+# Test LLM factory
+python -m pytest tests/test_llm_factory.py -v
+```
+
+### **Manual Testing**
+```bash
+# Test the complete system
+python graph.py
+
+# Test interactive mode
+python run.py
+```
+
+## 📊 Performance Characteristics
+
+### **Single Mode**
+- **Latency**: ~2-5 seconds per request
+- **Resource Usage**: 1 LLM call per request
+- **Use Case**: Simple, single-intent queries
+
+### **Parallel Mode**
+- **Latency**: ~5-15 seconds per request (depending on agents)
+- **Resource Usage**: Multiple concurrent LLM calls
+- **Efficiency**: Processes multiple intents simultaneously
+- **Use Case**: Complex, multi-intent queries
+
+### **Optimization Features**
+- **Lazy Loading**: LLM instances created only when needed
+- **Timeout Protection**: Prevents hanging requests
+- **Error Resilience**: Graceful degradation on failures
+- **Confidence Filtering**: Only processes high-confidence intents
+
+## 🚦 System Status
+
+- ✅ **Multi-Intent Detection**: Fully implemented
+- ✅ **Parallel Execution**: Working with ThreadPoolExecutor
+- ✅ **Result Aggregation**: LLM-powered intelligent combination
+- ✅ **Error Handling**: Comprehensive error management
+- ✅ **Backward Compatibility**: Legacy functions maintained
+- ✅ **Testing**: Unit tests for core components
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
+
+## 📄 License
 
 Apache License 2.0
+
+---
+
+**Built with ❤️ using LangGraph, LangChain, and modern Python practices**

@@ -18,7 +18,7 @@ class LLMConfig:
     temperature: float = 0.2
     top_p: float = 0.2
     top_k: int = 40
-    seed: int = 42
+
 
 
 @dataclass
@@ -37,7 +37,6 @@ class AppConfig:
                 temperature=float(os.getenv("LLM_TEMPERATURE", "0.2")),
                 top_p=float(os.getenv("LLM_TOP_P", "0.2")),
                 top_k=int(os.getenv("LLM_TOP_K", "40")),
-                seed=int(os.getenv("LLM_SEED", "42"))
             ),
             debug=os.getenv("DEBUG", "false").lower() == "true"
         )
