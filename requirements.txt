@@ -1,0 +1,20 @@
+# Core dependencies
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+
+# LLM Providers
+langchain-google-genai>=2.0.0
+langchain-openai>=0.2.0
+
+# Configuration and environment
+python-dotenv>=1.0.0
+
+# Testing
+pytest>=8.0.0
+pytest-cov>=5.0.0
+
+# Development
+black>=24.0.0
+flake8>=7.0.0
+mypy>=1.8.0
