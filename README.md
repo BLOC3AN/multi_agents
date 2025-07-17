@@ -287,6 +287,51 @@ python run.py
 
 Apache License 2.0
 
+## 🐳 Docker Deployment
+
+The system includes complete Docker deployment setup for both development and production environments.
+
+### **Quick Docker Deployment**
+
+```bash
+# Development deployment
+./deployment/scripts/deploy.sh dev --build
+
+# Production deployment
+cp deployment/.env.production deployment/.env
+# Edit deployment/.env with your API keys
+./deployment/scripts/deploy.sh prod --build
+```
+
+### **API Endpoints**
+Once deployed, the API will be available at:
+- **API Base**: `http://localhost:8000`
+- **Health Check**: `http://localhost:8000/health`
+- **Interactive Docs**: `http://localhost:8000/docs`
+- **Process Endpoint**: `POST http://localhost:8000/process`
+
+### **Example API Usage**
+```bash
+# Single intent
+curl -X POST "http://localhost:8000/process" \
+  -H "Content-Type: application/json" \
+  -d '{"input": "Solve 2x + 3 = 7"}'
+
+# Multi-intent parallel processing
+curl -X POST "http://localhost:8000/process" \
+  -H "Content-Type: application/json" \
+  -d '{"input": "Explain AI and solve 2x + 3 = 7", "use_parallel": true}'
+```
+
+### **Docker Services**
+- **multi-agent-api**: Main FastAPI application
+- **redis**: Caching and session management
+- **nginx**: Reverse proxy (production)
+- **prometheus**: Metrics collection (optional)
+- **grafana**: Monitoring dashboard (optional)
+
+For detailed deployment instructions, see [`deployment/README.md`](deployment/README.md).
+
 ---
 
-**Built with ❤️ using LangGraph, LangChain, and modern Python practices**
+**Built with ❤️ using LangGraph, LangChain, FastAPI, Docker, and modern Python practices**

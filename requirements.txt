@@ -10,9 +10,24 @@ langchain-openai>=0.2.0
 # Configuration and environment
 python-dotenv>=1.0.0
 
+# API Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+
+# HTTP client
+httpx>=0.25.0
+
+# Redis (optional for caching)
+redis>=5.0.0
+
+# Monitoring and metrics
+prometheus-client>=0.19.0
+
 # Testing
 pytest>=8.0.0
 pytest-cov>=5.0.0
+pytest-asyncio>=0.21.0
 
 # Development
 black>=24.0.0
