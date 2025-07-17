@@ -1,0 +1,64 @@
+version: '3.8'
+
+# Development version with hot reload and debugging
+services:
+  # Main Multi-Agent System API (Development)
+  multi-agent-api:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+      target: builder  # Use builder stage for development
+    container_name: multi-agent-api-dev
+    ports:
+      - "8000:8000"
+      - "5678:5678"  # Debug port
+    environment:
+      # LLM Configuration
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - LLM_MODEL=${LLM_MODEL:-gemini-2.0-flash}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.2}
+      - LLM_TOP_P=${LLM_TOP_P:-0.2}
+      - LLM_TOP_K=${LLM_TOP_K:-40}
+      
+      # API Keys
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Development Settings
+      - DEBUG=true
+      - PYTHONPATH=/app
+    volumes:
+      - ..:/app  # Mount source code for hot reload
+      - ./logs:/app/logs
+    restart: unless-stopped
+    command: >
+      python -m uvicorn api:app 
+      --host 0.0.0.0 
+      --port 8000 
+      --reload 
+      --log-level debug
+    networks:
+      - multi-agent-network
+    depends_on:
+      - redis
+
+  # Redis for development
+  redis:
+    image: redis:7-alpine
+    container_name: multi-agent-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    restart: unless-stopped
+    networks:
+      - multi-agent-network
+    command: redis-server --appendonly yes
+
+volumes:
+  redis_dev_data:
+    driver: local
+
+networks:
+  multi-agent-network:
+    driver: bridge
