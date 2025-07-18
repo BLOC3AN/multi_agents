@@ -43,6 +43,10 @@ class AgentState(TypedDict):
     # Metadata
     processing_mode: Optional[Literal["single", "parallel"]]
     execution_summary: Optional[Dict[str, any]]
+    # Context support
+    conversation_context: Optional[List[Dict[str, any]]]
+    user_id: Optional[str]
+    session_id: Optional[str]
 
 
 class AgentResponse(TypedDict):

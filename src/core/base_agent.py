@@ -25,8 +25,8 @@ class BaseAgent(ABC):
         return self._llm
     
     @abstractmethod
-    def get_prompt(self, user_input: str) -> str:
-        """Generate the prompt for this agent."""
+    def get_prompt(self, user_input: str, context: list = None) -> str:
+        """Generate the prompt for this agent with optional conversation context."""
         pass
     
     @abstractmethod
@@ -41,17 +41,18 @@ class BaseAgent(ABC):
         """
         try:
             user_input = state["input"]
-            prompt = self.get_prompt(user_input)
-            
+            context = state.get("conversation_context", [])
+            prompt = self.get_prompt(user_input, context)
+
             response = self.llm.invoke([HumanMessage(content=prompt)])
-            
+
             state["result"] = response.content
             state["error"] = None
-            
+
         except Exception as e:
             state["result"] = None
             state["error"] = f"Error in {self.get_agent_name()}: {str(e)}"
-        
+
         return state
     
     def __call__(self, state: AgentState) -> AgentState:

@@ -10,6 +10,8 @@ Complete Docker-based deployment solution for the Multi-Agent System with parall
 - API keys (Google Gemini or OpenAI)
 
 ### Development Deployment
+
+#### Option 1: Full Stack with Docker
 ```bash
 # Clone and navigate to project
 cd multi_agents
@@ -25,6 +27,36 @@ cp deployment/.env.production deployment/.env
 ./deployment/scripts/deploy.sh dev --logs
 ```
 
+#### Option 2: GUI Only with MongoDB Online (Recommended)
+```bash
+# Setup environment with your MongoDB URI (if .env doesn't exist)
+cp deployment/.env.production .env
+# Edit .env with your MongoDB URI and API keys
+
+# Start Redis only (MongoDB is online)
+./deployment/scripts/start_databases.sh
+
+# Start SocketIO server and Streamlit GUI
+./deployment/scripts/start_gui.sh dev
+
+# Stop services
+./deployment/scripts/stop_gui.sh
+./deployment/scripts/stop_databases.sh
+```
+
+#### Option 3: Docker with MongoDB Online
+```bash
+# Setup environment (if .env doesn't exist)
+cp deployment/.env.production .env
+# Edit .env with your MongoDB URI and API keys
+
+# Start with online MongoDB
+cd deployment && docker-compose up -d redis socketio-server streamlit-gui
+
+# View logs
+docker-compose logs -f
+```
+
 ### Production Deployment
 ```bash
 # Set up production environment
@@ -38,15 +70,23 @@ cp deployment/.env.production deployment/.env
 docker-compose -f deployment/docker-compose.yml ps
 ```
 
-## 📋 API Endpoints
+## 📋 Access Points
 
-### Core Endpoints
+### Web GUI (Recommended)
+- **Streamlit GUI**: http://localhost:8501
+- **Features**: User management, session tracking, real-time chat, conversation history
+
+### API Endpoints
 - **POST /process** - Process user input through multi-agent system
 - **GET /health** - Health check endpoint
 - **GET /agents** - List available agents and intents
 - **GET /config** - Get system configuration
 - **GET /docs** - Interactive API documentation (Swagger UI)
 - **GET /redoc** - Alternative API documentation
+
+### SocketIO Server
+- **SocketIO Server**: http://localhost:8001
+- **Features**: Real-time communication, user authentication, session management
 
 ### Example API Usage
 

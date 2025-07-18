@@ -9,20 +9,10 @@ services:
     container_name: multi-agent-api
     ports:
       - "8000:8000"
+
+    env_file:
+      - ../.env
     environment:
-      # LLM Configuration
-      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-      - LLM_MODEL=${LLM_MODEL:-gemini-2.0-flash}
-      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.2}
-      - LLM_TOP_P=${LLM_TOP_P:-0.2}
-      - LLM_TOP_K=${LLM_TOP_K:-40}
-      
-      # API Keys
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      
-      # Application Settings
-      - DEBUG=${DEBUG:-false}
       - PYTHONPATH=/app
     volumes:
       - ./logs:/app/logs
@@ -42,12 +32,72 @@ services:
       - "traefik.http.routers.multi-agent-api.rule=Host(`api.localhost`)"
       - "traefik.http.services.multi-agent-api.loadbalancer.server.port=8000"
 
+  # SocketIO Server for real-time communication
+  socketio-server:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.socketio
+    container_name: multi-agent-socketio
+    ports:
+      - "8001:8001"
+    env_file:
+      - ../.env    
+    environment:
+      # Only essential Docker-specific variables
+      - PYTHONPATH=/app
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 8001)); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - multi-agent-network
+    depends_on:
+      - redis
+
+  # Streamlit GUI
+  streamlit-gui:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.gui
+    container_name: multi-agent-gui
+    ports:
+      - "8501:8501"
+    env_file:
+      - ../.env
+    environment:
+      # Only essential Docker-specific variables
+      - PYTHONPATH=/app
+      - SOCKETIO_SERVER_URL=http://multi-agent-socketio:8001
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - multi-agent-network
+    depends_on:
+      - socketio-server
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.multi-agent-gui.rule=Host(`gui.localhost`)"
+      - "traefik.http.services.multi-agent-gui.loadbalancer.server.port=8501"
+
   # Redis for caching and session management
   redis:
     image: redis:7-alpine
     container_name: multi-agent-redis
     ports:
       - "6379:6379"
+    # Redis password will be read from .env via load_dotenv() if needed
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -58,14 +108,19 @@ services:
       retries: 3
     networks:
       - multi-agent-network
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
 
   # Nginx reverse proxy (optional)
   nginx:
     image: nginx:alpine
     container_name: multi-agent-nginx
     ports:
-      - "80:80"
+      #- "80:80"
+      - "3308:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -130,3 +185,4 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1

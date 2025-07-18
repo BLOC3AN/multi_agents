@@ -2,6 +2,8 @@
 FastAPI application for Multi-Agent System.
 Provides REST API endpoints for the parallel multi-agent system.
 """
+from dotenv import load_dotenv
+load_dotenv()
 import time
 import logging
 from typing import Dict, List, Optional
@@ -75,6 +77,7 @@ class HealthResponse(BaseModel):
 
 # Global variables
 agent_graph = None
+startup_time = time.time()
 
 
 @asynccontextmanager
@@ -208,6 +211,18 @@ async def health_check():
                 "error": str(e)
             }
         )
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return {
+        "status": "healthy",
+        "uptime": time.time() - startup_time if 'startup_time' in globals() else 0,
+        "requests_total": 0,  # Could be implemented with middleware
+        "version": "1.0.0",
+        "agent_graph_ready": 1 if agent_graph is not None else 0
+    }
 
 
 @app.post("/process", response_model=ProcessResponse)

@@ -13,9 +13,22 @@ class MathAgent(BaseAgent):
         """Return the name of this agent."""
         return "MathAgent"
 
-    def get_prompt(self, user_input: str) -> str:
-        """Generate the prompt for math problems."""
-        return f"Bạn hãy giải toán sau đây chi tiết bằng tiếng Việt:\n\n{user_input}"
+    def get_prompt(self, user_input: str, context: list = None) -> str:
+        """Generate the prompt for math problems with optional context."""
+        prompt = "Bạn là một chuyên gia toán học. Hãy giải toán chi tiết bằng tiếng Việt.\n\n"
+
+        # Add conversation context if available
+        if context and len(context) > 0:
+            prompt += "Ngữ cảnh cuộc trò chuyện trước đó:\n"
+            for msg in context[-3:]:  # Use last 3 messages for context
+                if msg.get("user_input"):
+                    prompt += f"Người dùng: {msg['user_input']}\n"
+                if msg.get("agent_response"):
+                    prompt += f"Trợ lý: {msg['agent_response'][:200]}...\n"
+            prompt += "\n"
+
+        prompt += f"Câu hỏi hiện tại:\n{user_input}\n\nHãy giải đáp chi tiết:"
+        return prompt
 
 
 # Legacy function for backward compatibility

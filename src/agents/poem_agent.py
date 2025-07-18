@@ -13,9 +13,22 @@ class PoemAgent(BaseAgent):
         """Return the name of this agent."""
         return "PoemAgent"
 
-    def get_prompt(self, user_input: str) -> str:
-        """Generate the prompt for poetry creation."""
-        return f"Viết một bài thơ ngắn dựa trên nội dung:\n\n{user_input}"
+    def get_prompt(self, user_input: str, context: list = None) -> str:
+        """Generate the prompt for poetry creation with optional context."""
+        prompt = "Bạn là một nhà thơ tài năng. Hãy sáng tác thơ hay và ý nghĩa.\n\n"
+
+        # Add conversation context if available
+        if context and len(context) > 0:
+            prompt += "Ngữ cảnh cuộc trò chuyện trước đó:\n"
+            for msg in context[-3:]:  # Use last 3 messages for context
+                if msg.get("user_input"):
+                    prompt += f"Người dùng: {msg['user_input']}\n"
+                if msg.get("agent_response"):
+                    prompt += f"Trợ lý: {msg['agent_response'][:200]}...\n"
+            prompt += "\n"
+
+        prompt += f"Yêu cầu sáng tác:\n{user_input}\n\nHãy viết một bài thơ hay:"
+        return prompt
 
 
 # Legacy function for backward compatibility

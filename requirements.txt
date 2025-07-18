@@ -29,6 +29,21 @@ pytest>=8.0.0
 pytest-cov>=5.0.0
 pytest-asyncio>=0.21.0
 
+# GUI Framework
+streamlit>=1.28.0
+
+# Database
+pymongo>=4.6.0
+motor>=3.3.0
+redis>=5.0.0
+pandas>=2.0.0
+
+# SocketIO
+python-socketio[asyncio]==5.8.0
+python-engineio==4.7.1
+eventlet==0.40.1
+websocket-client==1.8.0
+
 # Development
 black>=24.0.0
 flake8>=7.0.0
