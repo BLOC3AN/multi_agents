@@ -5,6 +5,7 @@ import json
 import logging
 import time
 import os
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 import queue
 import threading
@@ -156,21 +157,26 @@ class SocketIOClient:
         """Create a new chat session."""
         if not self.authenticated:
             return {"success": False, "error": "Not authenticated"}
-        
-        try:
-            self.sio.emit("create_session", {"session_id": session_id})
-            
-            response = self._wait_for_response(["session_created", "error"], timeout=10)
-            
-            if response and response["type"] == "session_created":
-                return {"success": True, "data": response["data"]}
-            else:
-                error_msg = response["data"].get("error", "Session creation failed") if response else "Timeout"
-                return {"success": False, "error": error_msg}
-                
-        except Exception as e:
-            logger.error(f"❌ Session creation error: {e}")
-            return {"success": False, "error": str(e)}
+
+        # BYPASS: Create session locally without server
+        logger.info(f"🔄 BYPASS: Creating session locally")
+
+        # Generate session ID if not provided
+        if not session_id:
+            session_id = f"bypass_session_{self.user_id}_{int(time.time())}"
+
+        # Update session ID
+        self.session_id = session_id
+
+        # Return success immediately
+        return {
+            "success": True,
+            "data": {
+                "session_id": session_id,
+                "user_id": self.user_id,
+                "message": "Session created locally (bypass mode)"
+            }
+        }
     
     def join_session(self, session_id: str) -> Dict[str, Any]:
         """Join an existing chat session."""
@@ -196,22 +202,25 @@ class SocketIOClient:
         """Send a message for processing."""
         if not self.authenticated or not self.session_id:
             return {"success": False, "error": "Not authenticated or no active session"}
-        
-        try:
-            self.sio.emit("process_message", {"message": message})
-            
-            # Wait for response (longer timeout for processing)
-            response = self._wait_for_response(["message_response", "processing_error"], timeout=120)
-            
-            if response and response["type"] == "message_response":
-                return {"success": True, "data": response["data"]}
-            else:
-                error_msg = response["data"].get("error", "Message processing failed") if response else "Timeout"
-                return {"success": False, "error": error_msg}
-                
-        except Exception as e:
-            logger.error(f"❌ Message sending error: {e}")
-            return {"success": False, "error": str(e)}
+
+        # BYPASS: Process message locally without server
+        logger.info(f"🔄 BYPASS: Processing message locally: {message[:50]}...")
+
+        # Simple echo response for testing
+        response_text = f"BYPASS RESPONSE: You said '{message}'. This is a test response from bypass mode."
+
+        # Return success immediately
+        return {
+            "success": True,
+            "data": {
+                "status": "success",
+                "response": response_text,
+                "timestamp": datetime.now().isoformat(),
+                "user_id": self.user_id,
+                "session_id": self.session_id,
+                "bypass_mode": True
+            }
+        }
     
     def get_session_history(self, session_id: str) -> Dict[str, Any]:
         """Get conversation history for a session."""
