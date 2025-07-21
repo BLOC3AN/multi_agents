@@ -5,7 +5,6 @@ import json
 import logging
 import time
 import os
-from datetime import datetime
 from typing import Dict, Any, Optional, List
 import queue
 import threading
@@ -134,49 +133,64 @@ class SocketIOClient:
         if not self.connected:
             return {"success": False, "error": "Not connected to server"}
 
-        # TEMPORARY BYPASS - Skip server authentication for now
-        logger.info(f"🔄 BYPASS: Simulating authentication for {user_id}")
+        # Wait a bit more to ensure connection is stable
+        time.sleep(2)
 
-        # Set authenticated state
-        self.authenticated = True
-        self.user_id = user_id
-        self.session_id = f"bypass_session_{user_id}_{int(time.time())}"
+        if not self.connected:
+            return {"success": False, "error": "Connection lost"}
 
-        # Return success immediately
-        return {
-            "success": True,
-            "data": {
+        try:
+            # Send authentication request to server
+            logger.info(f"🔐 Authenticating user: {user_id}")
+            logger.info(f"🔐 Connected: {self.connected}, SIO: {self.sio}")
+
+            auth_data = {
                 "user_id": user_id,
                 "display_name": display_name or user_id,
-                "email": email or f"{user_id}@example.com",
-                "message": "Authentication bypassed - working in test mode"
+                "email": email or f"{user_id}@example.com"
             }
-        }
+            logger.info(f"🔐 Sending auth data: {auth_data}")
+
+            self.sio.emit("authenticate", auth_data)
+            logger.info(f"🔐 Auth event sent, waiting for response...")
+
+            # Wait for authentication response
+            response = self._wait_for_response(["auth_success", "auth_error"], timeout=10)
+            logger.info(f"🔐 Auth response: {response}")
+
+            if response and response["type"] == "auth_success":
+                # Set authenticated state
+                self.authenticated = True
+                self.user_id = user_id
+
+                return {"success": True, "data": response["data"]}
+            else:
+                error_msg = response["data"].get("error", "Authentication failed") if response else "Timeout"
+                return {"success": False, "error": error_msg}
+
+        except Exception as e:
+            logger.error(f"❌ Authentication error: {e}")
+            return {"success": False, "error": str(e)}
     
     def create_session(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         """Create a new chat session."""
         if not self.authenticated:
             return {"success": False, "error": "Not authenticated"}
-
-        # BYPASS: Create session locally without server
-        logger.info(f"🔄 BYPASS: Creating session locally")
-
-        # Generate session ID if not provided
-        if not session_id:
-            session_id = f"bypass_session_{self.user_id}_{int(time.time())}"
-
-        # Update session ID
-        self.session_id = session_id
-
-        # Return success immediately
-        return {
-            "success": True,
-            "data": {
-                "session_id": session_id,
-                "user_id": self.user_id,
-                "message": "Session created locally (bypass mode)"
-            }
-        }
+        
+        try:
+            self.sio.emit("create_session", {"session_id": session_id})
+            
+            response = self._wait_for_response(["session_created", "error"], timeout=10)
+            
+            if response and response["type"] == "session_created":
+                return {"success": True, "data": response["data"]}
+            else:
+                error_msg = response["data"].get("error", "Session creation failed") if response else "Timeout"
+                return {"success": False, "error": error_msg}
+                
+        except Exception as e:
+            logger.error(f"❌ Session creation error: {e}")
+            return {"success": False, "error": str(e)}
     
     def join_session(self, session_id: str) -> Dict[str, Any]:
         """Join an existing chat session."""
@@ -202,25 +216,22 @@ class SocketIOClient:
         """Send a message for processing."""
         if not self.authenticated or not self.session_id:
             return {"success": False, "error": "Not authenticated or no active session"}
-
-        # BYPASS: Process message locally without server
-        logger.info(f"🔄 BYPASS: Processing message locally: {message[:50]}...")
-
-        # Simple echo response for testing
-        response_text = f"BYPASS RESPONSE: You said '{message}'. This is a test response from bypass mode."
-
-        # Return success immediately
-        return {
-            "success": True,
-            "data": {
-                "status": "success",
-                "response": response_text,
-                "timestamp": datetime.now().isoformat(),
-                "user_id": self.user_id,
-                "session_id": self.session_id,
-                "bypass_mode": True
-            }
-        }
+        
+        try:
+            self.sio.emit("process_message", {"message": message})
+            
+            # Wait for response (longer timeout for processing)
+            response = self._wait_for_response(["message_response", "processing_error"], timeout=120)
+            
+            if response and response["type"] == "message_response":
+                return {"success": True, "data": response["data"]}
+            else:
+                error_msg = response["data"].get("error", "Message processing failed") if response else "Timeout"
+                return {"success": False, "error": error_msg}
+                
+        except Exception as e:
+            logger.error(f"❌ Message sending error: {e}")
+            return {"success": False, "error": str(e)}
     
     def get_session_history(self, session_id: str) -> Dict[str, Any]:
         """Get conversation history for a session."""
@@ -288,7 +299,18 @@ def get_socketio_client(server_url: str = "http://localhost:8001") -> SocketIOCl
 def init_socketio_connection(server_url: Optional[str] = None) -> SocketIOClient:
     """Initialize SocketIO connection for Streamlit."""
     if server_url is None:
-        server_url = os.getenv("SOCKETIO_SERVER_URL", "http://localhost:8001")
+        # Check if we're running in Docker environment
+        docker_url = os.getenv("SOCKETIO_SERVER_URL")
+        logger.info(f"🔍 Environment SOCKETIO_SERVER_URL: {docker_url}")
+
+        if docker_url and "multi-agent-socketio" in docker_url:
+            # We're in Docker, use internal network URL
+            server_url = docker_url
+            logger.info(f"🔗 Using Docker internal URL: {server_url}")
+        else:
+            # We're running locally or need localhost
+            server_url = "http://localhost:8001"
+            logger.info(f"🔗 Using localhost URL: {server_url}")
 
     client = get_socketio_client(server_url)
 

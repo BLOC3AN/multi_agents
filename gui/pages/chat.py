@@ -45,8 +45,9 @@ def display_message(message: Dict[str, Any], is_user: bool = True):
                     with col2:
                         if info.get("processing_time"):
                             st.metric("Time", f"{info['processing_time']:.2f}s")
-                        if info.get("execution_summary", {}).get("total_agents"):
-                            st.metric("Agents", info["execution_summary"]["total_agents"])
+                        execution_summary = info.get("execution_summary") or {}
+                        if execution_summary.get("total_agents"):
+                            st.metric("Agents", execution_summary["total_agents"])
                     
                     with col3:
                         if info.get("detected_intents"):
@@ -54,10 +55,10 @@ def display_message(message: Dict[str, Any], is_user: bool = True):
                             for intent in info["detected_intents"]:
                                 st.write(f"• {intent['intent']} ({intent['confidence']:.2f})")
                     
-                    if info.get("execution_summary"):
-                        summary = info["execution_summary"]
+                    execution_summary = info.get("execution_summary")
+                    if execution_summary:
                         st.write("**Execution Summary:**")
-                        st.json(summary)
+                        st.json(execution_summary)
             
             if message.get("timestamp"):
                 st.caption(f"⏰ {format_timestamp(message['timestamp'])}")
@@ -111,7 +112,15 @@ def create_new_session():
     if not client:
         st.error("❌ Not connected to server")
         return
-    
+
+    # Check if client is still connected and authenticated
+    if not client.connected or not client.authenticated:
+        st.error("❌ Connection lost. Please login again.")
+        # Clear session state to force re-login
+        st.session_state.authenticated = False
+        st.rerun()
+        return
+
     with st.spinner("📝 Creating new session..."):
         result = client.create_session()
         
@@ -131,7 +140,15 @@ def load_session(session_id: str):
     if not client:
         st.error("❌ Not connected to server")
         return
-    
+
+    # Check if client is still connected and authenticated
+    if not client.connected or not client.authenticated:
+        st.error("❌ Connection lost. Please login again.")
+        # Clear session state to force re-login
+        st.session_state.authenticated = False
+        st.rerun()
+        return
+
     with st.spinner(f"📚 Loading session {session_id[:8]}..."):
         result = client.join_session(session_id)
         
@@ -330,17 +347,20 @@ def show_chat_page():
                 
                 if result["success"]:
                     response_data = result["data"]
-                    
+
                     # Update the last message with response data
                     st.session_state.conversation_history[-1].update({
-                        "agent_response": response_data.get("agent_response"),
+                        "agent_response": response_data.get("response"),  # Map "response" to "agent_response"
                         "primary_intent": response_data.get("primary_intent"),
                         "processing_mode": response_data.get("processing_mode"),
                         "detected_intents": response_data.get("detected_intents"),
                         "execution_summary": response_data.get("execution_summary"),
                         "processing_time": response_data.get("processing_time"),
-                        "success": response_data.get("success"),
-                        "errors": response_data.get("errors")
+                        "success": response_data.get("status") == "success",
+                        "errors": response_data.get("errors"),
+                        "agent_responses": response_data.get("agent_responses"),
+                        "metadata": response_data.get("metadata"),
+                        "timestamp": response_data.get("timestamp")
                     })
                     
                     st.rerun()
