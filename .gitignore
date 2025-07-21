@@ -201,6 +201,18 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Project specific
+gui_database.db
+*.backup
+*_working.py
+*_backup.py
+
+# Docker
+.dockerignore
+
+# Logs
+deployment/logs/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
