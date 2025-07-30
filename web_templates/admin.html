@@ -1,0 +1,515 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Multi-Agent System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>⚙️ Admin Dashboard</h1>
+        <p class="text-muted">System monitoring and management</p>
+        <hr>
+    </div>
+</div>
+
+<!-- Metrics Overview -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="admin-metric">
+            <h3 id="totalUsers">-</h3>
+            <p>Total Users</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="admin-metric">
+            <h3 id="activeSessions">-</h3>
+            <p>Active Sessions</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="admin-metric">
+            <h3 id="totalMessages">-</h3>
+            <p>Total Messages</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="admin-metric">
+            <h3 id="systemHealth">-</h3>
+            <p>System Health</p>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs" id="adminTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" 
+                type="button" role="tab">📊 Overview</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" 
+                type="button" role="tab">👥 Users</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions" 
+                type="button" role="tab">💬 Sessions</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="messages-tab" data-bs-toggle="tab" data-bs-target="#messages" 
+                type="button" role="tab">📝 Messages</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" 
+                type="button" role="tab">📋 Logs</button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content mt-4" id="adminTabContent">
+    <!-- Overview Tab -->
+    <div class="tab-pane fade show active" id="overview" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>📈 System Statistics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="systemStats">
+                            <div class="d-flex justify-content-center">
+                                <div class="loading-spinner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>🔧 System Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="systemStatus">
+                            <div class="d-flex justify-content-center">
+                                <div class="loading-spinner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div class="tab-pane fade" id="users" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>👥 User Management</h5>
+                <button class="btn btn-primary btn-sm" onclick="refreshUsers()">
+                    🔄 Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="usersTable">
+                    <div class="d-flex justify-content-center">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sessions Tab -->
+    <div class="tab-pane fade" id="sessions" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>💬 Session Management</h5>
+                <button class="btn btn-primary btn-sm" onclick="refreshSessions()">
+                    🔄 Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="sessionsTable">
+                    <div class="d-flex justify-content-center">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages Tab -->
+    <div class="tab-pane fade" id="messages" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>📝 Message Analysis</h5>
+                <button class="btn btn-primary btn-sm" onclick="refreshMessages()">
+                    🔄 Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="messagesTable">
+                    <div class="d-flex justify-content-center">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div class="tab-pane fade" id="logs" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>📋 System Logs</h5>
+                <div>
+                    <button class="btn btn-primary btn-sm" onclick="refreshLogs()">
+                        🔄 Refresh
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="clearLogs()">
+                        🗑️ Clear
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="logsContainer">
+                    <div class="d-flex justify-content-center">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Initialize admin dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    
+    // Set up tab change handlers
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(e) {
+            const target = e.target.getAttribute('data-bs-target');
+            loadTabData(target);
+        });
+    });
+});
+
+function loadDashboardData() {
+    console.log('📊 Loading admin dashboard data...');
+    
+    // Load overview metrics
+    loadMetrics();
+    loadSystemStats();
+}
+
+function loadMetrics() {
+    // Simulate loading metrics (replace with actual API calls)
+    setTimeout(() => {
+        document.getElementById('totalUsers').textContent = '42';
+        document.getElementById('activeSessions').textContent = '8';
+        document.getElementById('totalMessages').textContent = '1,234';
+        document.getElementById('systemHealth').textContent = '98%';
+    }, 1000);
+}
+
+function loadSystemStats() {
+    const statsHtml = `
+        <div class="row g-3">
+            <div class="col-6">
+                <div class="border rounded p-3 text-center">
+                    <h6>CPU Usage</h6>
+                    <div class="progress">
+                        <div class="progress-bar" style="width: 45%">45%</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="border rounded p-3 text-center">
+                    <h6>Memory Usage</h6>
+                    <div class="progress">
+                        <div class="progress-bar bg-warning" style="width: 68%">68%</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="border rounded p-3 text-center">
+                    <h6>Disk Usage</h6>
+                    <div class="progress">
+                        <div class="progress-bar bg-info" style="width: 32%">32%</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="border rounded p-3 text-center">
+                    <h6>Network I/O</h6>
+                    <div class="progress">
+                        <div class="progress-bar bg-success" style="width: 23%">23%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        document.getElementById('systemStats').innerHTML = statsHtml;
+    }, 1200);
+    
+    const statusHtml = `
+        <div class="list-group list-group-flush">
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>🔌 SocketIO Server</span>
+                <span class="badge bg-success">Online</span>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>🗄️ MongoDB</span>
+                <span class="badge bg-success">Connected</span>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>🔴 Redis Cache</span>
+                <span class="badge bg-success">Active</span>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>🤖 Agent System</span>
+                <span class="badge bg-success">Ready</span>
+            </div>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        document.getElementById('systemStatus').innerHTML = statusHtml;
+    }, 1500);
+}
+
+function loadTabData(target) {
+    switch(target) {
+        case '#users':
+            loadUsersData();
+            break;
+        case '#sessions':
+            loadSessionsData();
+            break;
+        case '#messages':
+            loadMessagesData();
+            break;
+        case '#logs':
+            loadLogsData();
+            break;
+    }
+}
+
+function loadUsersData() {
+    const usersHtml = `
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>User ID</th>
+                        <th>Display Name</th>
+                        <th>Email</th>
+                        <th>Created</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>admin</td>
+                        <td>Administrator</td>
+                        <td>admin@example.com</td>
+                        <td>2024-01-01</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary">View</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>user123</td>
+                        <td>John Doe</td>
+                        <td>john@example.com</td>
+                        <td>2024-01-15</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary">View</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        document.getElementById('usersTable').innerHTML = usersHtml;
+    }, 800);
+}
+
+function loadSessionsData() {
+    const sessionsHtml = `
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Session ID</th>
+                        <th>User</th>
+                        <th>Messages</th>
+                        <th>Created</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>sess_abc123...</td>
+                        <td>admin</td>
+                        <td>15</td>
+                        <td>2024-01-20 10:30</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary">View</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>sess_def456...</td>
+                        <td>user123</td>
+                        <td>8</td>
+                        <td>2024-01-20 09:15</td>
+                        <td><span class="badge bg-secondary">Inactive</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary">View</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        document.getElementById('sessionsTable').innerHTML = sessionsHtml;
+    }, 800);
+}
+
+function loadMessagesData() {
+    const messagesHtml = `
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5>1,234</h5>
+                        <small>Total Messages</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5>1,198</h5>
+                        <small>Successful</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5>36</h5>
+                        <small>Failed</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5>2.3s</h5>
+                        <small>Avg Response</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Message ID</th>
+                        <th>User</th>
+                        <th>Content</th>
+                        <th>Response Time</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>msg_123...</td>
+                        <td>admin</td>
+                        <td>Solve 2x + 3 = 7</td>
+                        <td>1.2s</td>
+                        <td><span class="badge bg-success">Success</span></td>
+                        <td>2024-01-20 10:35</td>
+                    </tr>
+                    <tr>
+                        <td>msg_456...</td>
+                        <td>user123</td>
+                        <td>Write a poem about AI</td>
+                        <td>3.1s</td>
+                        <td><span class="badge bg-success">Success</span></td>
+                        <td>2024-01-20 10:30</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        document.getElementById('messagesTable').innerHTML = messagesHtml;
+    }, 800);
+}
+
+function loadLogsData() {
+    const logsHtml = `
+        <div class="bg-dark text-light p-3 rounded" style="height: 400px; overflow-y: auto; font-family: monospace;">
+            <div>2024-01-20 10:35:42 [INFO] ✅ User admin authenticated successfully</div>
+            <div>2024-01-20 10:35:45 [INFO] 📝 Session created: sess_abc123...</div>
+            <div>2024-01-20 10:35:50 [INFO] 📨 Message received from admin: "Solve 2x + 3 = 7"</div>
+            <div>2024-01-20 10:35:51 [INFO] 🤖 Math agent processing request</div>
+            <div>2024-01-20 10:35:52 [INFO] ✅ Response sent to admin</div>
+            <div>2024-01-20 10:36:15 [INFO] 🔌 New client connected: socket_def456</div>
+            <div>2024-01-20 10:36:18 [INFO] ✅ User user123 authenticated successfully</div>
+            <div>2024-01-20 10:36:25 [INFO] 📨 Message received from user123: "Write a poem about AI"</div>
+            <div>2024-01-20 10:36:26 [INFO] 🤖 Poem agent processing request</div>
+            <div>2024-01-20 10:36:29 [INFO] ✅ Response sent to user123</div>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        document.getElementById('logsContainer').innerHTML = logsHtml;
+    }, 800);
+}
+
+function refreshUsers() {
+    document.getElementById('usersTable').innerHTML = '<div class="d-flex justify-content-center"><div class="loading-spinner"></div></div>';
+    loadUsersData();
+}
+
+function refreshSessions() {
+    document.getElementById('sessionsTable').innerHTML = '<div class="d-flex justify-content-center"><div class="loading-spinner"></div></div>';
+    loadSessionsData();
+}
+
+function refreshMessages() {
+    document.getElementById('messagesTable').innerHTML = '<div class="d-flex justify-content-center"><div class="loading-spinner"></div></div>';
+    loadMessagesData();
+}
+
+function refreshLogs() {
+    document.getElementById('logsContainer').innerHTML = '<div class="d-flex justify-content-center"><div class="loading-spinner"></div></div>';
+    loadLogsData();
+}
+
+function clearLogs() {
+    if (confirm('Are you sure you want to clear all logs?')) {
+        document.getElementById('logsContainer').innerHTML = '<div class="text-muted text-center">Logs cleared</div>';
+    }
+}
+</script>
+{% endblock %}

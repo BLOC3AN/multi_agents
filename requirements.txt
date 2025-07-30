@@ -32,6 +32,10 @@ pytest-asyncio>=0.21.0
 # GUI Framework
 streamlit>=1.28.0
 
+# HTMX FastAPI GUI (New)
+jinja2>=3.1.0
+python-multipart>=0.0.6
+
 # Database
 pymongo>=4.6.0
 motor>=3.3.0

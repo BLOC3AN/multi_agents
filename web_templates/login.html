@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Multi-Agent System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card">
+            <div class="card-body p-5">
+                <!-- Header -->
+                <div class="text-center mb-4">
+                    <h1 class="h3 mb-3">🤖 Multi-Agent System</h1>
+                    <p class="text-muted">Experience the power of parallel AI processing</p>
+                </div>
+
+                <!-- Error Message -->
+                {% if error %}
+                <div class="alert alert-danger" role="alert">
+                    ❌ {{ error }}
+                </div>
+                {% endif %}
+
+                <!-- Login Form -->
+                <form method="post" action="/login" id="loginForm">
+                    <div class="mb-3">
+                        <label for="user_id" class="form-label">User ID *</label>
+                        <input type="text" class="form-control" id="user_id" name="user_id" 
+                               placeholder="Enter your unique identifier" required minlength="3" maxlength="50">
+                        <div class="form-text">At least 3 characters, letters, numbers, dots, underscores, and hyphens only</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="display_name" class="form-label">Display Name</label>
+                        <input type="text" class="form-control" id="display_name" name="display_name" 
+                               placeholder="How you want to be called (optional)">
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" 
+                               placeholder="your.email@example.com (optional)">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2" id="loginBtn">
+                        🚀 Connect to Multi-Agent System
+                    </button>
+                </form>
+
+                <!-- Features Section -->
+                <div class="mt-4">
+                    <div class="accordion" id="featuresAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#featuresCollapse">
+                                    🚀 System Features
+                                </button>
+                            </h2>
+                            <div id="featuresCollapse" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
+                                <div class="accordion-body">
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <h6>🧠 Intelligent Features:</h6>
+                                            <ul class="list-unstyled ms-3">
+                                                <li>✓ Multi-Intent Detection: AI automatically detects multiple intents</li>
+                                                <li>✓ Parallel Processing: Multiple agents work simultaneously</li>
+                                                <li>✓ Smart Aggregation: AI combines results intelligently</li>
+                                                <li>✓ Conversation Memory: Agents remember context</li>
+                                                <li>✓ Real-time Communication: Instant WebSocket responses</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-12">
+                                            <h6>🎯 Specialized Agents:</h6>
+                                            <ul class="list-unstyled ms-3">
+                                                <li>📊 Math Agent: Solves equations and calculations</li>
+                                                <li>📚 English Agent: Explains concepts and answers questions</li>
+                                                <li>🎭 Poem Agent: Creates poetry and creative writing</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#guideCollapse">
+                                    📚 Quick Start Guide
+                                </button>
+                            </h2>
+                            <div id="guideCollapse" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
+                                <div class="accordion-body">
+                                    <h6>Getting Started:</h6>
+                                    <ol>
+                                        <li><strong>Enter your User ID</strong> - This will be your unique identifier</li>
+                                        <li><strong>Add display name</strong> (optional) - How you want to be called</li>
+                                        <li><strong>Click Connect</strong> - Connect to the system</li>
+                                        <li><strong>Start chatting</strong> - Try these examples:</li>
+                                    </ol>
+                                    
+                                    <div class="bg-light p-3 rounded mt-3">
+                                        <h6>Example Queries:</h6>
+                                        <ul class="list-unstyled">
+                                            <li>💡 "Solve 2x + 3 = 7"</li>
+                                            <li>💡 "Write a poem about AI"</li>
+                                            <li>💡 "Explain machine learning and calculate 10 + 15"</li>
+                                        </ul>
+                                    </div>
+
+                                    <h6 class="mt-3">Pro Tips:</h6>
+                                    <ul class="list-unstyled">
+                                        <li>💡 Use the same User ID to access your conversation history</li>
+                                        <li>💡 Try multi-intent queries to see parallel processing in action</li>
+                                        <li>💡 Your conversations are automatically saved and can be resumed</li>
+                                        <li>💡 Each session has a unique ID for organization</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    const loginBtn = document.getElementById('loginBtn');
+    loginBtn.innerHTML = '<span class="loading-spinner"></span> Connecting...';
+    loginBtn.disabled = true;
+});
+
+// Auto-focus on user_id field
+document.getElementById('user_id').focus();
+</script>
+{% endblock %}

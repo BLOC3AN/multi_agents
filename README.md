@@ -1,4 +1,6 @@
-# Multi-Agent System with Parallel Execution
+# Multi-Agent System 🚀
+
+**High-Performance AI Multi-Agent System with FastAPI + HTMX GUI** with Parallel Execution
 
 A clean and intelligent multi-agent system built with LangGraph that supports both single and parallel agent execution based on multi-intent detection.
 

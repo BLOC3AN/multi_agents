@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Multi-Agent System{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary-color: #1f77b4;
+            --secondary-color: #f8f9fa;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: var(--primary-color) !important;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: #1565c0;
+            border-color: #1565c0;
+        }
+        
+        .chat-container {
+            height: 70vh;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 1rem;
+            background: white;
+        }
+        
+        .message-user {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 18px 18px 4px 18px;
+            margin: 0.5rem 0;
+            margin-left: 20%;
+            word-wrap: break-word;
+        }
+        
+        .message-assistant {
+            background-color: #e9ecef;
+            color: #333;
+            padding: 0.75rem 1rem;
+            border-radius: 18px 18px 18px 4px;
+            margin: 0.5rem 0;
+            margin-right: 20%;
+            word-wrap: break-word;
+        }
+        
+        .message-timestamp {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 0.25rem;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-connected {
+            background-color: var(--success-color);
+        }
+        
+        .status-disconnected {
+            background-color: var(--danger-color);
+        }
+        
+        .status-connecting {
+            background-color: var(--warning-color);
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .feature-card {
+            transition: transform 0.2s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .admin-metric {
+            background: linear-gradient(135deg, var(--primary-color), #1565c0);
+            color: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        
+        .admin-metric h3 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .admin-metric p {
+            margin: 0;
+            opacity: 0.9;
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                🤖 Multi-Agent System
+            </a>
+            
+            {% if user %}
+            <div class="navbar-nav ms-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        👤 {{ user.display_name }}
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="/chat">💬 Chat</a></li>
+                        <li><a class="dropdown-item" href="/admin">⚙️ Admin</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/logout">🚪 Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mt-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white mt-5 py-4 border-top">
+        <div class="container text-center text-muted">
+            <p>&copy; 2024 Multi-Agent System. Powered by FastAPI + HTMX</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

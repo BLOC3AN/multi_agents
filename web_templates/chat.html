@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Multi-Agent System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Sidebar -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header">
+                <h5>💬 Chat Sessions</h5>
+            </div>
+            <div class="card-body">
+                <!-- Connection Status -->
+                <div class="mb-3">
+                    <span class="status-indicator status-connecting" id="connectionStatus"></span>
+                    <span id="connectionText">Connecting...</span>
+                </div>
+
+                <!-- Current Session -->
+                <div class="mb-3" id="currentSessionInfo" style="display: none;">
+                    <small class="text-muted">Active Session:</small>
+                    <div class="fw-bold" id="currentSessionId"></div>
+                </div>
+
+                <!-- New Session Button -->
+                <button class="btn btn-primary w-100 mb-3" onclick="createNewSession()">
+                    ➕ New Session
+                </button>
+
+                <!-- Recent Sessions -->
+                <div id="recentSessions">
+                    <h6>Recent Sessions</h6>
+                    <div class="text-muted">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>🤖 Multi-Agent System Chat</h5>
+                <div>
+                    <span class="badge bg-success">{{ user.display_name }}</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <!-- Chat Messages Container -->
+                <div class="chat-container" id="chatContainer">
+                    <div class="text-center text-muted p-4" id="welcomeMessage">
+                        <h5>👋 Welcome to Multi-Agent System!</h5>
+                        <p>Create a new session or select an existing one to start chatting.</p>
+                        <div class="mt-3">
+                            <button class="btn btn-primary" onclick="createNewSession()">
+                                🚀 Start New Session
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Input -->
+                <div class="border-top p-3" id="chatInputArea" style="display: none;">
+                    <form id="chatForm" onsubmit="sendMessage(event)">
+                        <div class="row g-2">
+                            <div class="col">
+                                <textarea class="form-control" id="messageInput" rows="2" 
+                                         placeholder="Ask me anything! I can solve math, write poems, explain concepts, or handle multiple requests at once..."
+                                         required></textarea>
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-primary h-100" id="sendButton">
+                                    🚀 Send
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="forceParallel">
+                            <label class="form-check-label" for="forceParallel">
+                                Force parallel processing
+                            </label>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Processing Modal -->
+<div class="modal fade" id="processingModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="loading-spinner mx-auto mb-3"></div>
+                <h6>🤖 Processing your request...</h6>
+                <p class="text-muted mb-0">AI agents are working in parallel</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Global variables
+let socket = null;
+let currentSessionId = null;
+let conversationHistory = [];
+let isAuthenticated = false;
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeSocketIO();
+});
+
+function initializeSocketIO() {
+    console.log('🔌 Connecting to SocketIO server...');
+    updateConnectionStatus('connecting', 'Connecting...');
+    
+    socket = io('{{ socketio_url }}');
+    
+    // Connection events
+    socket.on('connect', function() {
+        console.log('✅ Connected to SocketIO server');
+        updateConnectionStatus('connected', 'Connected');
+        authenticateUser();
+    });
+    
+    socket.on('disconnect', function() {
+        console.log('❌ Disconnected from SocketIO server');
+        updateConnectionStatus('disconnected', 'Disconnected');
+        isAuthenticated = false;
+    });
+    
+    // Authentication events
+    socket.on('auth_success', function(data) {
+        console.log('✅ Authentication successful', data);
+        isAuthenticated = true;
+        updateConnectionStatus('connected', 'Connected & Authenticated');
+        loadRecentSessions();
+    });
+    
+    socket.on('auth_error', function(data) {
+        console.error('❌ Authentication failed', data);
+        alert('Authentication failed: ' + data.error);
+    });
+    
+    // Session events
+    socket.on('session_created', function(data) {
+        console.log('✅ Session created', data);
+        currentSessionId = data.session_id;
+        updateCurrentSession(data);
+        showChatInput();
+        hideWelcomeMessage();
+    });
+    
+    socket.on('session_joined', function(data) {
+        console.log('✅ Session joined', data);
+        currentSessionId = data.session_id;
+        updateCurrentSession(data);
+        showChatInput();
+        hideWelcomeMessage();
+        loadSessionHistory();
+    });
+    
+    // Message events
+    socket.on('message_response', function(data) {
+        console.log('📨 Message response received', data);
+        hideProcessingModal();
+        addMessageToChat(data, false);
+        enableChatInput();
+    });
+    
+    socket.on('processing_error', function(data) {
+        console.error('❌ Processing error', data);
+        hideProcessingModal();
+        alert('Error: ' + data.error);
+        enableChatInput();
+    });
+    
+    socket.on('error', function(data) {
+        console.error('❌ Socket error', data);
+        alert('Error: ' + data.error);
+    });
+}
+
+function authenticateUser() {
+    const userData = {
+        user_id: '{{ user.user_id }}',
+        display_name: '{{ user.display_name }}',
+        email: '{{ user.email }}'
+    };
+    
+    console.log('🔐 Authenticating user...', userData);
+    socket.emit('authenticate', userData);
+}
+
+function updateConnectionStatus(status, text) {
+    const statusEl = document.getElementById('connectionStatus');
+    const textEl = document.getElementById('connectionText');
+    
+    statusEl.className = `status-indicator status-${status}`;
+    textEl.textContent = text;
+}
+
+function createNewSession() {
+    if (!isAuthenticated) {
+        alert('Please wait for authentication to complete');
+        return;
+    }
+    
+    console.log('📝 Creating new session...');
+    socket.emit('create_session', {});
+}
+
+function updateCurrentSession(sessionData) {
+    document.getElementById('currentSessionId').textContent = sessionData.session_id.substring(0, 8) + '...';
+    document.getElementById('currentSessionInfo').style.display = 'block';
+}
+
+function showChatInput() {
+    document.getElementById('chatInputArea').style.display = 'block';
+    document.getElementById('messageInput').focus();
+}
+
+function hideWelcomeMessage() {
+    document.getElementById('welcomeMessage').style.display = 'none';
+}
+
+function sendMessage(event) {
+    event.preventDefault();
+    
+    if (!isAuthenticated || !currentSessionId) {
+        alert('Please create a session first');
+        return;
+    }
+    
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value.trim();
+    
+    if (!message) return;
+    
+    // Add user message to chat immediately
+    addMessageToChat({
+        content: message,
+        timestamp: new Date().toISOString(),
+        user_input: message
+    }, true);
+    
+    // Clear input and disable
+    messageInput.value = '';
+    disableChatInput();
+    showProcessingModal();
+    
+    // Send to server
+    console.log('📤 Sending message:', message);
+    socket.emit('process_message', { message: message });
+}
+
+function addMessageToChat(data, isUser) {
+    const chatContainer = document.getElementById('chatContainer');
+    const messageDiv = document.createElement('div');
+    
+    if (isUser) {
+        messageDiv.className = 'message-user';
+        messageDiv.innerHTML = `
+            <div>${escapeHtml(data.content || data.user_input)}</div>
+            <div class="message-timestamp">${formatTimestamp(data.timestamp)}</div>
+        `;
+    } else {
+        messageDiv.className = 'message-assistant';
+        let content = `<div>${escapeHtml(data.response)}</div>`;
+        
+        // Add processing info if available
+        if (data.agent_responses) {
+            content += `<div class="mt-2"><small class="text-muted">Processed by ${Object.keys(data.agent_responses).length} agents</small></div>`;
+        }
+        
+        content += `<div class="message-timestamp">${formatTimestamp(data.timestamp)}</div>`;
+        messageDiv.innerHTML = content;
+    }
+    
+    chatContainer.appendChild(messageDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function showProcessingModal() {
+    new bootstrap.Modal(document.getElementById('processingModal')).show();
+}
+
+function hideProcessingModal() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('processingModal'));
+    if (modal) modal.hide();
+}
+
+function disableChatInput() {
+    document.getElementById('messageInput').disabled = true;
+    document.getElementById('sendButton').disabled = true;
+}
+
+function enableChatInput() {
+    document.getElementById('messageInput').disabled = false;
+    document.getElementById('sendButton').disabled = false;
+    document.getElementById('messageInput').focus();
+}
+
+function loadRecentSessions() {
+    // This would load recent sessions from the server
+    // For now, just show a placeholder
+    document.getElementById('recentSessions').innerHTML = `
+        <h6>Recent Sessions</h6>
+        <div class="text-muted">No recent sessions</div>
+    `;
+}
+
+function loadSessionHistory() {
+    // This would load session history from the server
+    // For now, just clear the chat
+    document.getElementById('chatContainer').innerHTML = '';
+}
+
+function formatTimestamp(timestamp) {
+    try {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString();
+    } catch (e) {
+        return timestamp;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Handle Enter key in textarea
+document.getElementById('messageInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage(e);
+    }
+});
+</script>
+{% endblock %}

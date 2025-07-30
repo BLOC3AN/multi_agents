@@ -83,9 +83,9 @@ up-socketio: ## Start SocketIO server (Python)
 	    echo "📋 Logs: tail -f logs/socketio.log"; \
 	fi
 
-# Start Streamlit GUI
-up-gui: ## Start Streamlit GUI
-	@echo "🎨 Starting Streamlit GUI..."
+# Start Streamlit GUI (Legacy)
+up-gui-old: ## Start Streamlit GUI (Legacy)
+	@echo "🎨 Starting Streamlit GUI (Legacy)..."
 	@if [ -f $(GUI_PID_FILE) ]; then \
 	    echo "⚠️  GUI already running (PID: $$(cat $(GUI_PID_FILE)))"; \
 	else \
@@ -94,6 +94,19 @@ up-gui: ## Start Streamlit GUI
 	    echo "✅ GUI started on port 8501 (PID: $$(cat $(GUI_PID_FILE)))"; \
 	    echo "📋 Logs: tail -f logs/gui.log"; \
 	    echo "🌐 Access: http://localhost:8501"; \
+	fi
+
+# Start FastAPI + HTMX GUI (New)
+up-gui: ## Start FastAPI + HTMX GUI (New - High Performance)
+	@echo "🚀 Starting FastAPI + HTMX GUI..."
+	@if [ -f $(GUI_PID_FILE) ]; then \
+	    echo "⚠️  GUI already running (PID: $$(cat $(GUI_PID_FILE)))"; \
+	else \
+	    echo "$$(date '+%Y-%m-%d %H:%M:%S') - Starting FastAPI GUI..." >> logs/gui.log; \
+	    python3 web_app.py >> logs/gui.log 2>&1 & echo $$! > $(GUI_PID_FILE); \
+	    echo "✅ FastAPI GUI started on port 8502 (PID: $$(cat $(GUI_PID_FILE)))"; \
+	    echo "📋 Logs: tail -f logs/gui.log"; \
+	    echo "🌐 Access: http://localhost:8502"; \
 	fi
 
 # Stop all services
@@ -167,7 +180,7 @@ status: ## Show service status
 	fi
 	@if [ -f $(GUI_PID_FILE) ]; then \
 	    if ps -p $$(cat $(GUI_PID_FILE)) > /dev/null 2>&1; then \
-	        echo "✅ GUI: Running (PID: $$(cat $(GUI_PID_FILE))) - http://localhost:8501"; \
+	        echo "✅ GUI: Running (PID: $$(cat $(GUI_PID_FILE))) - http://localhost:8502"; \
 	    else \
 	        echo "❌ GUI: Dead process"; rm -f $(GUI_PID_FILE); \
 	    fi \
