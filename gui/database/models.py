@@ -3,7 +3,7 @@ MongoDB models for user management and conversation tracking.
 """
 import os
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from dataclasses import dataclass, asdict
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from pymongo.collection import Collection
@@ -123,7 +123,7 @@ class ChatSession:
 @dataclass
 class ChatMessage:
     """Individual chat message model."""
-    message_id: str|None
+    message_id: Union[str, None]
     session_id: str
     user_input: str
     agent_response: Optional[str] = None

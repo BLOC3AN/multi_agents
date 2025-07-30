@@ -60,15 +60,26 @@ src/
 
 ## Installation
 
+### Prerequisites
+- **Python 3.10+** (required - uses modern union type syntax)
+- Docker & Docker Compose (for deployment)
+- API keys (Google Gemini or OpenAI)
+
 1. Clone the repository:
 ```bash
 git clone <repository-url>
 cd multi_agents
 ```
 
-2. Install dependencies:
+2. Check dependencies:
 ```bash
-pip install -r requirements.txt
+make check-deps
+```
+
+3. Install dependencies:
+```bash
+make install
+# or manually: pip install -r requirements.txt
 ```
 
 3. Set up environment variables:
