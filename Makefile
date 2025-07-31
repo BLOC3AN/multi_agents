@@ -1,15 +1,16 @@
 # Makefile for Multi-Agent System (Local Development - No Docker)
-# Services: SocketIO Server, Streamlit GUI, Redis (Docker minimal)
+# Services: SocketIO Server, React Frontend, Redis (Docker minimal)
 
 .PHONY: help install setup dev up down restart logs clean clean-all status health
-.PHONY: up-redis up-socketio up-gui down-redis down-socketio down-gui
-.PHONY: logs-socketio logs-gui logs-redis restart-socketio restart-gui
+.PHONY: up-redis up-socketio up-react down-redis down-socketio down-react
+.PHONY: logs-socketio logs-redis logs-react restart-socketio restart-react
 .PHONY: test test-coverage lint format format-check build docker-build docker-clean docker-up docker-down
-.PHONY: dev-setup dev-check quick-start quick-stop help-detailed open-gui open-socketio
+.PHONY: dev-setup dev-check quick-start quick-stop help-detailed open-socketio open-react
+.PHONY: install-react setup-react dev-react build-react
 
 # Process management
 SOCKETIO_PID_FILE := .socketio.pid
-GUI_PID_FILE := .gui.pid
+REACT_PID_FILE := .react.pid
 
 # Python executable detection
 PYTHON := $(shell command -v python3.10 2>/dev/null || command -v python3.11 2>/dev/null || command -v python3.12 2>/dev/null || echo python3)
@@ -41,7 +42,7 @@ install: check-deps ## Install Python dependencies
 setup: ## Setup environment (create directories, check .env)
 	@echo "🔧 Setting up environment..."
 	@mkdir -p logs
-	@touch logs/socketio.log logs/gui.log
+	@touch logs/socketio.log logs/react.log
 	@if [ ! -f ".env" ]; then \
 	    echo "⚠️  .env not found, copying from template..."; \
 	    if [ -f ".env.example" ]; then \
@@ -54,15 +55,11 @@ setup: ## Setup environment (create directories, check .env)
 	fi
 	@echo "✅ Environment setup completed"
 
-# Development mode (quick start)
-dev: install setup up ## Quick development start
-	@echo "🎉 Development environment ready!"
-	@echo "Services:"
-	@echo "  - SocketIO: http://localhost:8001"
-	@echo "  - GUI: http://localhost:8501"
+# Development mode (recommended)
+dev: dev-react ## Quick development start with React
 
-# Start all services
-up: up-redis up-socketio up-gui ## Start all services
+# Start all services with React (recommended)
+up: up-redis up-socketio up-react ## Start all services with React
 	@echo "✅ All services started!"
 	@make status
 
@@ -83,34 +80,47 @@ up-socketio: ## Start SocketIO server (Python)
 	    echo "📋 Logs: tail -f logs/socketio.log"; \
 	fi
 
-# Start Streamlit GUI (Legacy)
-up-gui-old: ## Start Streamlit GUI (Legacy)
-	@echo "🎨 Starting Streamlit GUI (Legacy)..."
-	@if [ -f $(GUI_PID_FILE) ]; then \
-	    echo "⚠️  GUI already running (PID: $$(cat $(GUI_PID_FILE)))"; \
+# Legacy GUI commands removed - migrated to React frontend
+
+# React Frontend Commands
+install-react: ## Install React frontend dependencies
+	@echo "📦 Installing React frontend dependencies..."
+	@cd frontend && npm install
+	@echo "✅ React dependencies installed"
+
+setup-react: install-react ## Setup React frontend environment
+	@echo "🔧 Setting up React frontend..."
+	@cd frontend && [ -f .env ] || cp .env.example .env
+	@echo "✅ React frontend setup completed"
+
+# Start React development server
+up-react: ## Start React development server
+	@echo "⚛️  Starting React development server..."
+	@if [ -f $(REACT_PID_FILE) ]; then \
+	    echo "⚠️  React already running (PID: $$(cat $(REACT_PID_FILE)))"; \
 	else \
-	    echo "$$(date '+%Y-%m-%d %H:%M:%S') - Starting Streamlit GUI..." >> logs/gui.log; \
-	    echo "" | streamlit run gui/main.py --server.port 8501 --server.address 0.0.0.0 >> logs/gui.log 2>&1 & echo $$! > $(GUI_PID_FILE); \
-	    echo "✅ GUI started on port 8501 (PID: $$(cat $(GUI_PID_FILE)))"; \
-	    echo "📋 Logs: tail -f logs/gui.log"; \
-	    echo "🌐 Access: http://localhost:8501"; \
+	    echo "$$(date '+%Y-%m-%d %H:%M:%S') - Starting React dev server..." >> logs/react.log; \
+	    cd frontend && npm run dev >> ../logs/react.log 2>&1 & echo $$! > ../$(REACT_PID_FILE); \
+	    echo "✅ React started on port 3000 (PID: $$(cat $(REACT_PID_FILE)))"; \
+	    echo "📋 Logs: tail -f logs/react.log"; \
+	    echo "🌐 Access: http://localhost:3000"; \
 	fi
 
-# Start FastAPI + HTMX GUI (New)
-up-gui: ## Start FastAPI + HTMX GUI (New - High Performance)
-	@echo "🚀 Starting FastAPI + HTMX GUI..."
-	@if [ -f $(GUI_PID_FILE) ]; then \
-	    echo "⚠️  GUI already running (PID: $$(cat $(GUI_PID_FILE)))"; \
-	else \
-	    echo "$$(date '+%Y-%m-%d %H:%M:%S') - Starting FastAPI GUI..." >> logs/gui.log; \
-	    python3 web_app.py >> logs/gui.log 2>&1 & echo $$! > $(GUI_PID_FILE); \
-	    echo "✅ FastAPI GUI started on port 8502 (PID: $$(cat $(GUI_PID_FILE)))"; \
-	    echo "📋 Logs: tail -f logs/gui.log"; \
-	    echo "🌐 Access: http://localhost:8502"; \
-	fi
+# Build React for production
+build-react: ## Build React frontend for production
+	@echo "🏗️  Building React frontend for production..."
+	@cd frontend && npm run build
+	@echo "✅ React build completed"
+
+# Development mode with React
+dev-react: install setup-react up-redis up-socketio up-react ## Quick development start with React
+	@echo "🎉 React development environment ready!"
+	@echo "Services:"
+	@echo "  - React Frontend: http://localhost:3000"
+	@echo "  - SocketIO: http://localhost:8001"
 
 # Stop all services
-down: down-gui down-socketio down-redis ## Stop all services
+down: down-react down-socketio down-redis ## Stop all services
 	@echo "✅ All services stopped!"
 
 # Stop Redis
@@ -129,37 +139,43 @@ down-socketio: ## Stop SocketIO server
 	    echo "⚠️  SocketIO not running"; \
 	fi
 
-# Stop GUI
-down-gui: ## Stop Streamlit GUI
-	@echo "🛑 Stopping GUI..."
-	@if [ -f $(GUI_PID_FILE) ]; then \
-	    kill $$(cat $(GUI_PID_FILE)) 2>/dev/null || true; \
-	    rm -f $(GUI_PID_FILE); \
-	    echo "✅ GUI stopped"; \
+# Legacy GUI stop command removed
+
+# Stop React
+down-react: ## Stop React development server
+	@echo "🛑 Stopping React development server..."
+	@if [ -f $(REACT_PID_FILE) ]; then \
+	    kill $$(cat $(REACT_PID_FILE)) 2>/dev/null || true; \
+	    rm -f $(REACT_PID_FILE); \
+	    echo "✅ React stopped"; \
 	else \
-	    echo "⚠️  GUI not running"; \
+	    echo "⚠️  React not running"; \
 	fi
 
 # Restart services
-restart: down up ## Restart all services
+restart: down up ## Restart all services (legacy)
+
+restart-react: down-react up-react ## Restart React development server
 
 restart-socketio: down-socketio up-socketio ## Restart SocketIO server
 
-restart-gui: down-gui up-gui ## Restart GUI
+# Legacy GUI restart command removed
 
 # Show logs
 logs: ## Show all logs (follow mode)
 	@echo "📋 Showing all logs (Ctrl+C to exit)..."
-	@echo "📁 Log files: logs/socketio.log logs/gui.log"
-	@tail -f logs/socketio.log logs/gui.log 2>/dev/null || echo "⚠️  Some log files may not exist"
+	@echo "📁 Log files: logs/socketio.log logs/react.log"
+	@tail -f logs/socketio.log logs/react.log 2>/dev/null || echo "⚠️  Some log files may not exist"
+
+logs-react: ## Show React logs
+	@echo "📋 React development server logs:"
+	@tail -f logs/react.log 2>/dev/null || echo "⚠️  React log not found"
 
 logs-socketio: ## Show SocketIO logs
 	@echo "📋 SocketIO logs:"
 	@tail -f logs/socketio.log 2>/dev/null || echo "⚠️  SocketIO log not found"
 
-logs-gui: ## Show GUI logs
-	@echo "📋 GUI logs:"
-	@tail -f logs/gui.log 2>/dev/null || echo "⚠️  GUI log not found"
+# Legacy GUI logs command removed
 
 logs-redis: ## Show Redis logs
 	@echo "📋 Redis logs:"
@@ -178,14 +194,15 @@ status: ## Show service status
 	else \
 	    echo "⭕ SocketIO: Not running"; \
 	fi
-	@if [ -f $(GUI_PID_FILE) ]; then \
-	    if ps -p $$(cat $(GUI_PID_FILE)) > /dev/null 2>&1; then \
-	        echo "✅ GUI: Running (PID: $$(cat $(GUI_PID_FILE))) - http://localhost:8502"; \
+	# Legacy GUI status check removed
+	@if [ -f $(REACT_PID_FILE) ]; then \
+	    if ps -p $$(cat $(REACT_PID_FILE)) > /dev/null 2>&1; then \
+	        echo "✅ React Frontend: Running (PID: $$(cat $(REACT_PID_FILE))) - http://localhost:3000"; \
 	    else \
-	        echo "❌ GUI: Dead process"; rm -f $(GUI_PID_FILE); \
+	        echo "❌ React: Dead process"; rm -f $(REACT_PID_FILE); \
 	    fi \
 	else \
-	    echo "⭕ GUI: Not running"; \
+	    echo "⭕ React Frontend: Not running"; \
 	fi
 	@echo -n "🔄 Redis: "
 	@cd deployment && docker-compose ps redis --format "table" | grep -q "Up" && echo "✅ Running" || echo "❌ Not running"
@@ -305,14 +322,7 @@ quick-start: dev-setup up ## Quick start for development
 quick-stop: down clean ## Quick stop and cleanup
 	@echo "🛑 Quick stop completed!"
 
-# Browser shortcuts
-open-gui: ## Open GUI in browser
-	@echo "🌐 Opening GUI in browser..."
-	@command -v open >/dev/null 2>&1 && open http://localhost:8501 || echo "Please open http://localhost:8501 manually"
 
-open-socketio: ## Open SocketIO docs in browser
-	@echo "🔌 Opening SocketIO docs in browser..."
-	@command -v open >/dev/null 2>&1 && open http://localhost:8001 || echo "Please open http://localhost:8001 manually"
 
 # Help with more details
 help-detailed: ## Show detailed help with examples
@@ -357,6 +367,17 @@ help-detailed: ## Show detailed help with examples
 	@echo "  make kill-all      - Force kill all processes"
 	@echo ""
 	@echo "🌐 Access Points:"
-	@echo "  - GUI: http://localhost:8501"
+	@echo "  - React Frontend: http://localhost:3000"
 	@echo "  - SocketIO: http://localhost:8001"
 	@echo "  - Redis: localhost:6379"
+
+# Open services in browser
+open-react: ## Open React frontend in browser
+	@echo "🌐 Opening React frontend..."
+	@open http://localhost:3000 2>/dev/null || xdg-open http://localhost:3000 2>/dev/null || echo "Please open http://localhost:3000 manually"
+
+# Legacy GUI open command removed
+
+open-socketio: ## Open SocketIO health check in browser
+	@echo "🌐 Opening SocketIO health check..."
+	@open http://localhost:8001/health 2>/dev/null || xdg-open http://localhost:8001/health 2>/dev/null || echo "Please open http://localhost:8001/health manually"
