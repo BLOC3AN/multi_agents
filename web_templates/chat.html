@@ -30,8 +30,15 @@
 
                 <!-- Recent Sessions -->
                 <div id="recentSessions">
-                    <h6>Recent Sessions</h6>
-                    <div class="text-muted">Loading...</div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Recent Sessions</h6>
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadUserSessions()" title="Refresh">
+                            🔄
+                        </button>
+                    </div>
+                    <div id="sessionsList">
+                        <div class="text-muted">Loading...</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -65,9 +72,9 @@
                     <form id="chatForm" onsubmit="sendMessage(event)">
                         <div class="row g-2">
                             <div class="col">
-                                <textarea class="form-control" id="messageInput" rows="2" 
+                                <textarea class="form-control" id="messageInput" rows="2"
                                          placeholder="Ask me anything! I can solve math, write poems, explain concepts, or handle multiple requests at once..."
-                                         required></textarea>
+                                         required style="resize: none; overflow: hidden; min-height: 60px; max-height: 200px;"></textarea>
                             </div>
                             <div class="col-auto">
                                 <button type="submit" class="btn btn-primary h-100" id="sendButton">
@@ -113,6 +120,10 @@ let isAuthenticated = false;
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     initializeSocketIO();
+    // Auto-load latest session on page load
+    setTimeout(() => {
+        loadUserSessions(true); // true = auto-load latest session
+    }, 1000); // Wait for auth to complete
 });
 
 function initializeSocketIO() {
@@ -139,7 +150,8 @@ function initializeSocketIO() {
         console.log('✅ Authentication successful', data);
         isAuthenticated = true;
         updateConnectionStatus('connected', 'Connected & Authenticated');
-        loadRecentSessions();
+        // Auto-load latest session after auth
+        loadUserSessions(true);
     });
     
     socket.on('auth_error', function(data) {
@@ -154,6 +166,11 @@ function initializeSocketIO() {
         updateCurrentSession(data);
         showChatInput();
         hideWelcomeMessage();
+
+        // Refresh sessions list to show new session
+        setTimeout(() => {
+            loadUserSessions();
+        }, 500);
     });
     
     socket.on('session_joined', function(data) {
@@ -162,12 +179,28 @@ function initializeSocketIO() {
         updateCurrentSession(data);
         showChatInput();
         hideWelcomeMessage();
-        loadSessionHistory();
+        // Load session history if we have a session ID
+        if (data.session_id) {
+            loadSessionHistory(data.session_id);
+        }
     });
     
     // Message events
     socket.on('message_response', function(data) {
         console.log('📨 Message response received', data);
+
+        // Update current session ID if this is a new session
+        if (data.session_id && !currentSessionId) {
+            currentSessionId = data.session_id;
+            document.getElementById('currentSessionId').textContent = data.session_id.substring(0, 8) + '...';
+            document.getElementById('currentSessionInfo').style.display = 'block';
+
+            // Refresh sessions list to show new session
+            setTimeout(() => {
+                loadUserSessions();
+            }, 1000);
+        }
+
         hideProcessingModal();
         addMessageToChat(data, false);
         enableChatInput();
@@ -262,28 +295,79 @@ function sendMessage(event) {
 function addMessageToChat(data, isUser) {
     const chatContainer = document.getElementById('chatContainer');
     const messageDiv = document.createElement('div');
-    
+
     if (isUser) {
         messageDiv.className = 'message-user';
+        const userContent = data.content || data.user_input;
         messageDiv.innerHTML = `
-            <div>${escapeHtml(data.content || data.user_input)}</div>
+            <div class="message-content">${renderContent(userContent)}</div>
             <div class="message-timestamp">${formatTimestamp(data.timestamp)}</div>
         `;
     } else {
         messageDiv.className = 'message-assistant';
-        let content = `<div>${escapeHtml(data.response)}</div>`;
-        
+        let content = `<div class="message-content">${renderContent(data.response)}</div>`;
+
         // Add processing info if available
         if (data.agent_responses) {
             content += `<div class="mt-2"><small class="text-muted">Processed by ${Object.keys(data.agent_responses).length} agents</small></div>`;
         }
-        
+
         content += `<div class="message-timestamp">${formatTimestamp(data.timestamp)}</div>`;
         messageDiv.innerHTML = content;
+
+        // Render math after adding to DOM
+        setTimeout(() => {
+            renderMathInElement(messageDiv, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\[', right: '\\]', display: true},
+                    {left: '\\(', right: '\\)', display: false}
+                ]
+            });
+        }, 10);
     }
-    
+
     chatContainer.appendChild(messageDiv);
     chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function renderContent(content) {
+    if (!content) return '';
+
+    try {
+        // Configure marked for better rendering
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    try {
+                        return hljs.highlight(code, { language: lang }).value;
+                    } catch (err) {}
+                }
+                return hljs.highlightAuto(code).value;
+            }
+        });
+
+        // Parse markdown
+        let rendered = marked.parse(content);
+
+        // Handle special cases for better formatting
+        rendered = rendered
+            // Fix paragraph spacing
+            .replace(/<p><\/p>/g, '<br>')
+            // Better line breaks
+            .replace(/\n\n/g, '<br><br>')
+            // Clean up extra spaces
+            .replace(/\s+/g, ' ');
+
+        return rendered;
+    } catch (error) {
+        console.error('Error rendering content:', error);
+        // Fallback to escaped HTML
+        return escapeHtml(content).replace(/\n/g, '<br>');
+    }
 }
 
 function showProcessingModal() {
@@ -306,19 +390,219 @@ function enableChatInput() {
     document.getElementById('messageInput').focus();
 }
 
-function loadRecentSessions() {
-    // This would load recent sessions from the server
-    // For now, just show a placeholder
-    document.getElementById('recentSessions').innerHTML = `
-        <h6>Recent Sessions</h6>
-        <div class="text-muted">No recent sessions</div>
-    `;
+function loadUserSessions(autoLoadLatest = false) {
+    fetch('/api/chat/sessions')
+        .then(response => response.json())
+        .then(data => {
+            const sessionsList = document.getElementById('sessionsList');
+
+            if (data.sessions && data.sessions.length > 0) {
+                let sessionsHtml = '';
+
+                // Auto-load latest session if requested and no current session
+                if (autoLoadLatest && !currentSessionId && data.sessions.length > 0) {
+                    const latestSession = data.sessions[0]; // Sessions are sorted by updated_at desc
+                    currentSessionId = latestSession.session_id;
+
+                    // Update UI
+                    document.getElementById('currentSessionId').textContent = latestSession.session_id.substring(0, 8) + '...';
+                    document.getElementById('currentSessionInfo').style.display = 'block';
+
+                    // Load session history
+                    loadSessionHistory(latestSession.session_id);
+
+                    console.log(`🔄 Auto-loaded latest session: ${latestSession.session_id}`);
+                }
+
+                data.sessions.forEach(session => {
+                    const isActive = session.session_id === currentSessionId;
+                    const activeClass = isActive ? 'active' : '';
+
+                    sessionsHtml += `
+                        <div class="session-item ${activeClass}" onclick="loadSession('${session.session_id}')">
+                            <div class="session-title">
+                                💬 ${session.session_id_display}
+                            </div>
+                            <div class="session-preview">
+                                ${session.last_message_preview}
+                            </div>
+                            <div class="session-meta">
+                                <span>${session.updated_at}</span>
+                                <span class="session-count">${session.message_count} msgs</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                sessionsList.innerHTML = sessionsHtml;
+            } else {
+                sessionsList.innerHTML = `
+                    <div class="text-muted text-center py-3">
+                        <div>📝 No chat history yet</div>
+                        <small>Start a conversation to see sessions here</small>
+                    </div>
+                `;
+
+                // Show welcome message if no sessions
+                if (autoLoadLatest) {
+                    document.getElementById('chatContainer').innerHTML = `
+                        <div class="text-center text-muted py-5">
+                            <div class="mb-3">
+                                <h4>👋 Welcome to Multi-Agent System!</h4>
+                                <p>Start a conversation to see the power of parallel AI processing</p>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="card border-primary">
+                                        <div class="card-body text-center">
+                                            <h6>🧮 Math & Science</h6>
+                                            <p class="small">Solve equations, explain concepts</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-body text-center">
+                                            <h6>✍️ Writing & Analysis</h6>
+                                            <p class="small">Create content, analyze text</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading sessions:', error);
+            document.getElementById('sessionsList').innerHTML = `
+                <div class="text-danger text-center py-3">
+                    <div>❌ Error loading sessions</div>
+                    <small>Please try again</small>
+                </div>
+            `;
+        });
 }
 
-function loadSessionHistory() {
-    // This would load session history from the server
-    // For now, just clear the chat
-    document.getElementById('chatContainer').innerHTML = '';
+function loadSession(sessionId) {
+    if (sessionId === currentSessionId) {
+        return; // Already loaded
+    }
+
+    // Update current session
+    currentSessionId = sessionId;
+
+    // Update UI
+    document.getElementById('currentSessionId').textContent = sessionId.substring(0, 8) + '...';
+    document.getElementById('currentSessionInfo').style.display = 'block';
+
+    // Load session messages
+    loadSessionHistory(sessionId);
+
+    // Update active session in sidebar
+    document.querySelectorAll('.session-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.target.closest('.session-item').classList.add('active');
+
+    // Enable chat input for continuing conversation
+    enableChatInput();
+
+    // Focus on message input
+    document.getElementById('messageInput').focus();
+
+    console.log(`📂 Loaded session: ${sessionId} - Ready to continue conversation`);
+}
+
+function loadSessionHistory(sessionId) {
+    fetch(`/api/chat/history/${sessionId}`)
+        .then(response => response.json())
+        .then(data => {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = '';
+
+            if (data.messages && data.messages.length > 0) {
+                data.messages.forEach(msg => {
+                    // Add user message
+                    if (msg.user_input) {
+                        addMessageToChat({
+                            content: msg.user_input,
+                            timestamp: msg.created_at
+                        }, true);
+                    }
+
+                    // Add assistant response
+                    if (msg.agent_response) {
+                        addMessageToChat({
+                            response: msg.agent_response,
+                            timestamp: msg.created_at,
+                            agent_responses: msg.agent_responses
+                        }, false);
+                    }
+                });
+
+                // Render math in all loaded messages
+                setTimeout(() => {
+                    document.querySelectorAll('.message-assistant .message-content').forEach(element => {
+                        renderMathInElement(element, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\[', right: '\\]', display: true},
+                                {left: '\\(', right: '\\)', display: false}
+                            ]
+                        });
+                    });
+                }, 100);
+            } else {
+                chatContainer.innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <div class="mb-2">📝 Empty session</div>
+                        <small>No messages in this session yet</small>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading session history:', error);
+            document.getElementById('chatContainer').innerHTML = `
+                <div class="text-center text-danger py-5">
+                    <div class="mb-2">❌ Error loading session</div>
+                    <small>Please try again</small>
+                </div>
+            `;
+        });
+}
+
+function createNewSession() {
+    // Clear current chat
+    document.getElementById('chatContainer').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <div class="mb-2">💬 New Chat Session</div>
+            <small>Start typing to begin a new conversation</small>
+        </div>
+    `;
+
+    // Reset current session
+    currentSessionId = null;
+    document.getElementById('currentSessionInfo').style.display = 'none';
+
+    // Remove active class from all sessions
+    document.querySelectorAll('.session-item').forEach(item => {
+        item.classList.remove('active');
+    });
+
+    // Emit create_session event to server
+    if (socket && socket.connected) {
+        console.log('📝 Creating new session...');
+        socket.emit('create_session', {});
+    }
+
+    // Focus on input
+    document.getElementById('messageInput').focus();
+
+    console.log('🆕 Created new session');
 }
 
 function formatTimestamp(timestamp) {
@@ -336,12 +620,28 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Handle Enter key in textarea
-document.getElementById('messageInput').addEventListener('keydown', function(e) {
+// Handle Enter key in textarea and auto-resize
+const messageInput = document.getElementById('messageInput');
+
+messageInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage(e);
     }
 });
+
+// Auto-resize textarea
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 200);
+    textarea.style.height = newHeight + 'px';
+}
+
+messageInput.addEventListener('input', function() {
+    autoResizeTextarea(this);
+});
+
+// Initialize auto-resize
+autoResizeTextarea(messageInput);
 </script>
 {% endblock %}

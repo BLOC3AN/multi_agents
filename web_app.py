@@ -446,6 +446,69 @@ async def update_user_password(user_id: str, request: Request, user: Dict[str, A
         return {"success": False, "message": "Failed to update password"}
 
 
+@app.get("/api/chat/sessions")
+async def get_user_sessions(user: Dict[str, Any] = Depends(require_auth)):
+    """Get user's chat sessions."""
+    try:
+        user_id = user.get("user_id")
+        logger.info(f"🔍 Getting sessions for user: {user_id}")
+
+        # Get user's sessions, sorted by most recent
+        sessions = list(db_config.sessions.find(
+            {"user_id": user_id}
+        ).sort("updated_at", -1).limit(20))
+
+        logger.info(f"📊 Found {len(sessions)} sessions for user {user_id}")
+
+        session_list = []
+        for session in sessions:
+            # Get message count for this session
+            message_count = db_config.messages.count_documents({"session_id": session.get("session_id")})
+
+            # Get last message for preview
+            last_message = db_config.messages.find_one(
+                {"session_id": session.get("session_id")},
+                sort=[("created_at", -1)]
+            )
+
+            # Format session data
+            created_at = session.get("created_at")
+            updated_at = session.get("updated_at")
+
+            # Handle both datetime objects and strings
+            if isinstance(created_at, str):
+                created_at_str = created_at[:16] if len(created_at) >= 16 else created_at
+            elif hasattr(created_at, 'strftime'):
+                created_at_str = created_at.strftime("%Y-%m-%d %H:%M")
+            else:
+                created_at_str = "Unknown"
+
+            if isinstance(updated_at, str):
+                updated_at_str = updated_at[:16] if len(updated_at) >= 16 else updated_at
+            elif hasattr(updated_at, 'strftime'):
+                updated_at_str = updated_at.strftime("%Y-%m-%d %H:%M")
+            else:
+                updated_at_str = "Unknown"
+
+            session_data = {
+                "session_id": session.get("session_id"),
+                "session_id_display": session.get("session_id", "")[:8] + "...",
+                "created_at": created_at_str,
+                "updated_at": updated_at_str,
+                "message_count": message_count,
+                "last_message_preview": last_message.get("user_input", "")[:50] + "..." if last_message and last_message.get("user_input") else "No messages",
+                "is_active": session.get("is_active", True)
+            }
+            session_list.append(session_data)
+
+        logger.info(f"✅ Returning {len(session_list)} sessions for user {user_id}")
+        return {"sessions": session_list}
+
+    except Exception as e:
+        logger.error(f"❌ Error getting user sessions: {e}")
+        return {"sessions": []}
+
+
 @app.get("/api/admin/sessions")
 async def get_admin_sessions(user: Dict[str, Any] = Depends(require_auth)):
     """Get sessions list for admin dashboard."""
@@ -691,6 +754,59 @@ async def get_admin_messages(user: Dict[str, Any] = Depends(require_auth)):
             },
             "recent_messages": []
         }
+
+
+@app.get("/api/chat/history/{session_id}")
+async def get_session_history(session_id: str, user: Dict[str, Any] = Depends(require_auth)):
+    """Get messages for a specific session."""
+    try:
+        user_id = user.get("user_id")
+        logger.info(f"🔍 Getting history for session: {session_id}, user: {user_id}")
+
+        # Verify session belongs to user
+        session = db_config.sessions.find_one({
+            "session_id": session_id,
+            "user_id": user_id
+        })
+
+        if not session:
+            logger.warning(f"❌ Session {session_id} not found for user {user_id}")
+            return {"messages": []}
+
+        # Get messages for this session
+        messages = list(db_config.messages.find(
+            {"session_id": session_id}
+        ).sort("created_at", 1))
+
+        logger.info(f"📊 Found {len(messages)} messages for session {session_id}")
+
+        message_list = []
+        for msg in messages:
+            # Handle datetime formatting
+            created_at = msg.get("created_at")
+            if isinstance(created_at, str):
+                created_at_str = created_at
+            elif hasattr(created_at, 'isoformat'):
+                created_at_str = created_at.isoformat()
+            else:
+                created_at_str = str(created_at)
+
+            message_data = {
+                "message_id": str(msg.get("_id")),
+                "user_input": msg.get("user_input"),
+                "agent_response": msg.get("agent_response"),
+                "agent_responses": msg.get("agent_responses", {}),
+                "created_at": created_at_str,
+                "processing_time": msg.get("processing_time")
+            }
+            message_list.append(message_data)
+
+        logger.info(f"✅ Returning {len(message_list)} messages for session {session_id}")
+        return {"messages": message_list}
+
+    except Exception as e:
+        logger.error(f"❌ Error getting session history: {e}")
+        return {"messages": []}
 
 
 if __name__ == "__main__":

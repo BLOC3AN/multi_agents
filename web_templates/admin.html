@@ -567,13 +567,15 @@ function loadLogsData() {
                         'DEBUG': 'text-muted'
                     }[log.level] || 'text-light';
 
+                    const cleanMessage = log.message.replace(log.timestamp, '').replace(`[${log.level}]`, '').trim();
+
                     logsHtml += `
                         <div class="mb-1">
                             <span class="text-muted">${log.timestamp}</span>
                             <span class="badge bg-secondary">${log.source}</span>
                             <span class="${levelColor}">[${log.level}]</span>
                             <span>${log.icon}</span>
-                            <span>${log.message.replace(log.timestamp, '').replace(`[${log.level}]`, '').trim()}</span>
+                            <span class="log-content">${cleanMessage}</span>
                         </div>
                     `;
                 });
