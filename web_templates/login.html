@@ -23,26 +23,21 @@
                 <!-- Login Form -->
                 <form method="post" action="/login" id="loginForm">
                     <div class="mb-3">
-                        <label for="user_id" class="form-label">User ID *</label>
-                        <input type="text" class="form-control" id="user_id" name="user_id" 
-                               placeholder="Enter your unique identifier" required minlength="3" maxlength="50">
+                        <label for="username" class="form-label">Username *</label>
+                        <input type="text" class="form-control" id="username" name="username"
+                               placeholder="Enter your username" required minlength="3" maxlength="50">
                         <div class="form-text">At least 3 characters, letters, numbers, dots, underscores, and hyphens only</div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="display_name" class="form-label">Display Name</label>
-                        <input type="text" class="form-control" id="display_name" name="display_name" 
-                               placeholder="How you want to be called (optional)">
-                    </div>
-
                     <div class="mb-4">
-                        <label for="email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="email" name="email" 
-                               placeholder="your.email@example.com (optional)">
+                        <label for="password" class="form-label">Password *</label>
+                        <input type="password" class="form-control" id="password" name="password"
+                               placeholder="Enter your password" required minlength="6">
+                        <div class="form-text">At least 6 characters</div>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100 py-2" id="loginBtn">
-                        🚀 Connect to Multi-Agent System
+                        🔐 Login to Multi-Agent System
                     </button>
                 </form>
 

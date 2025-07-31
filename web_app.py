@@ -122,34 +122,45 @@ async def login_page(request: Request):
 @app.post("/login")
 async def login_submit(
     request: Request,
-    user_id: str = Form(...),
-    display_name: str = Form(""),
-    email: str = Form("")
+    username: str = Form(...),
+    password: str = Form(...)
 ):
     """Handle login form submission."""
-    # Validate user_id
-    if not user_id or len(user_id) < 3:
+    # Validate username
+    if not username or len(username) < 3:
         return templates.TemplateResponse("login.html", {
             "request": request,
-            "error": "User ID must be at least 3 characters long",
+            "error": "Username must be at least 3 characters long",
             "socketio_url": SOCKETIO_URL
         })
-    
+
+    # Validate password
+    if not password or len(password) < 6:
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Password must be at least 6 characters long",
+            "socketio_url": SOCKETIO_URL
+        })
+
+    # Simple authentication (in production, use proper password hashing)
+    # For demo purposes, we'll accept any username/password combination
+    # You can add real authentication logic here
+
     # Store user in session
     user_data = {
-        "user_id": user_id,
-        "display_name": display_name or user_id,
-        "email": email,
+        "user_id": username,  # Use username as user_id for compatibility
+        "display_name": username,
+        "email": None,
         "authenticated": True,
         "login_time": datetime.now().isoformat()
     }
-    
+
     request.session["user"] = user_data
-    
+
     # Cache user data if Redis available
     if redis_cache:
-        redis_cache.set_user_cache(user_id, user_data)
-    
+        redis_cache.set_user_cache(username, user_data)
+
     return RedirectResponse(url="/chat", status_code=302)
 
 
@@ -251,6 +262,98 @@ async def get_admin_users(user: Dict[str, Any] = Depends(require_auth)):
         return {"users": []}
 
 
+@app.post("/api/admin/users")
+async def add_user(request: Request, user: Dict[str, Any] = Depends(require_auth)):
+    """Add new user."""
+    try:
+        data = await request.json()
+
+        user_id = data.get("user_id", "").strip()
+        display_name = data.get("display_name", "").strip()
+        email = data.get("email", "").strip()
+        is_active = data.get("is_active", True)
+
+        # Validate user_id
+        if not user_id or len(user_id) < 3:
+            return {"success": False, "message": "User ID must be at least 3 characters long"}
+
+        # Check if user already exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if existing_user:
+            return {"success": False, "message": f"User '{user_id}' already exists"}
+
+        # Create new user
+        from gui.database.models import User
+        new_user = User(
+            user_id=user_id,
+            display_name=display_name or user_id,
+            email=email if email else None,
+            is_active=is_active,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
+        # Save to database
+        user_doc = new_user.to_dict()
+        db_config.users.insert_one(user_doc)
+
+        logger.info(f"✅ New user created by admin: {user_id}")
+
+        return {
+            "success": True,
+            "message": f"User '{user_id}' created successfully",
+            "user": {
+                "user_id": user_id,
+                "display_name": display_name or user_id,
+                "email": email,
+                "is_active": is_active
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error adding user: {e}")
+        return {"success": False, "message": "Failed to add user"}
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_user(user_id: str, user: Dict[str, Any] = Depends(require_auth)):
+    """Delete user and all related data."""
+    try:
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            return {"success": False, "message": f"User '{user_id}' not found"}
+
+        # Prevent deleting current admin user
+        if user_id == user.get("user_id"):
+            return {"success": False, "message": "Cannot delete your own account"}
+
+        # Delete user's sessions
+        sessions_deleted = db_config.sessions.delete_many({"user_id": user_id})
+
+        # Delete user's messages
+        messages_deleted = db_config.messages.delete_many({"user_id": user_id})
+
+        # Delete user
+        user_deleted = db_config.users.delete_one({"user_id": user_id})
+
+        logger.info(f"🗑️ User deleted by admin: {user_id} (sessions: {sessions_deleted.deleted_count}, messages: {messages_deleted.deleted_count})")
+
+        return {
+            "success": True,
+            "message": f"User '{user_id}' and all related data deleted successfully",
+            "deleted": {
+                "user": user_deleted.deleted_count,
+                "sessions": sessions_deleted.deleted_count,
+                "messages": messages_deleted.deleted_count
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error deleting user: {e}")
+        return {"success": False, "message": "Failed to delete user"}
+
+
 @app.get("/api/admin/sessions")
 async def get_admin_sessions(user: Dict[str, Any] = Depends(require_auth)):
     """Get sessions list for admin dashboard."""
@@ -271,7 +374,8 @@ async def get_admin_sessions(user: Dict[str, Any] = Depends(require_auth)):
                 created_at_str = "N/A"
 
             sessions.append({
-                "session_id": session_doc.get("session_id", "")[:12] + "...",
+                "session_id": session_doc.get("session_id", ""),
+                "session_id_display": session_doc.get("session_id", "")[:12] + "...",
                 "user_id": session_doc.get("user_id"),
                 "total_messages": session_doc.get("total_messages", 0),
                 "created_at": created_at_str,
@@ -281,6 +385,156 @@ async def get_admin_sessions(user: Dict[str, Any] = Depends(require_auth)):
     except Exception as e:
         logger.error(f"Error getting sessions: {e}")
         return {"sessions": []}
+
+
+@app.get("/api/admin/session/{session_id}")
+async def get_session_details(session_id: str, user: Dict[str, Any] = Depends(require_auth)):
+    """Get detailed session information."""
+    try:
+        # Get session details
+        session_doc = db_config.sessions.find_one({"session_id": session_id})
+        if not session_doc:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get session messages
+        messages_cursor = db_config.messages.find({"session_id": session_id}).sort("created_at", 1)
+        messages = []
+        for msg_doc in messages_cursor:
+            created_at = msg_doc.get("created_at")
+            if created_at:
+                if isinstance(created_at, datetime):
+                    created_at_str = created_at.strftime("%Y-%m-%d %H:%M")
+                else:
+                    created_at_str = str(created_at)[:16]
+            else:
+                created_at_str = "N/A"
+
+            messages.append({
+                "message_id": msg_doc.get("message_id", ""),
+                "user_input": msg_doc.get("user_input", ""),
+                "agent_response": msg_doc.get("agent_response", ""),
+                "processing_time": f"{msg_doc.get('processing_time', 0) / 1000:.1f}s" if msg_doc.get('processing_time') else "N/A",
+                "success": msg_doc.get("success", False),
+                "created_at": created_at_str
+            })
+
+        # Format session data
+        created_at = session_doc.get("created_at")
+        if created_at:
+            if isinstance(created_at, datetime):
+                created_at_str = created_at.strftime("%Y-%m-%d %H:%M")
+            else:
+                created_at_str = str(created_at)[:16]
+        else:
+            created_at_str = "N/A"
+
+        session_data = {
+            "session_id": session_doc.get("session_id"),
+            "user_id": session_doc.get("user_id"),
+            "title": session_doc.get("title", ""),
+            "created_at": created_at_str,
+            "total_messages": session_doc.get("total_messages", 0),
+            "is_active": session_doc.get("is_active", True),
+            "messages": messages
+        }
+
+        return session_data
+    except Exception as e:
+        logger.error(f"Error getting session details: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get session details")
+
+
+@app.get("/api/admin/logs")
+async def get_admin_logs(user: Dict[str, Any] = Depends(require_auth)):
+    """Get system logs for admin dashboard."""
+    try:
+        logs = []
+
+        # Read recent logs from log files
+        log_files = ["logs/gui.log", "logs/socketio.log"]
+
+        for log_file in log_files:
+            try:
+                if os.path.exists(log_file):
+                    with open(log_file, 'r') as f:
+                        lines = f.readlines()
+                        # Get last 50 lines
+                        recent_lines = lines[-50:] if len(lines) > 50 else lines
+
+                        for line in recent_lines:
+                            line = line.strip()
+                            if line:
+                                # Parse log level and message
+                                if "INFO" in line:
+                                    level = "INFO"
+                                    icon = "ℹ️"
+                                elif "ERROR" in line:
+                                    level = "ERROR"
+                                    icon = "❌"
+                                elif "WARNING" in line:
+                                    level = "WARNING"
+                                    icon = "⚠️"
+                                elif "DEBUG" in line:
+                                    level = "DEBUG"
+                                    icon = "🔍"
+                                else:
+                                    level = "INFO"
+                                    icon = "📝"
+
+                                # Extract timestamp if available
+                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                if line.startswith("2024"):
+                                    timestamp = line[:19]
+
+                                logs.append({
+                                    "timestamp": timestamp,
+                                    "level": level,
+                                    "icon": icon,
+                                    "message": line,
+                                    "source": log_file.split("/")[-1]
+                                })
+            except Exception as e:
+                logger.error(f"Error reading log file {log_file}: {e}")
+
+        # Sort by timestamp (newest first)
+        logs.sort(key=lambda x: x["timestamp"], reverse=True)
+
+        # Limit to last 100 entries
+        logs = logs[:100]
+
+        return {"logs": logs}
+
+    except Exception as e:
+        logger.error(f"Error getting logs: {e}")
+        return {"logs": []}
+
+
+@app.post("/api/admin/logs/clear")
+async def clear_admin_logs(user: Dict[str, Any] = Depends(require_auth)):
+    """Clear system logs."""
+    try:
+        log_files = ["logs/gui.log", "logs/socketio.log"]
+        cleared_files = []
+
+        for log_file in log_files:
+            try:
+                if os.path.exists(log_file):
+                    # Clear file content
+                    with open(log_file, 'w') as f:
+                        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Logs cleared by admin\n")
+                    cleared_files.append(log_file)
+            except Exception as e:
+                logger.error(f"Error clearing log file {log_file}: {e}")
+
+        return {
+            "success": True,
+            "message": f"Cleared {len(cleared_files)} log files",
+            "files": cleared_files
+        }
+
+    except Exception as e:
+        logger.error(f"Error clearing logs: {e}")
+        return {"success": False, "message": "Failed to clear logs"}
 
 
 @app.get("/api/admin/messages")

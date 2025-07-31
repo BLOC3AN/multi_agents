@@ -125,6 +125,7 @@ class ChatMessage:
     """Individual chat message model."""
     message_id: Union[str, None]
     session_id: str
+    user_id: str  # Added user_id field
     user_input: str
     agent_response: Optional[str] = None
     detected_intents: Optional[List[Dict[str, Any]]] = None
@@ -136,6 +137,7 @@ class ChatMessage:
     processing_time: Optional[int] = None
     errors: Optional[List[str]] = None
     success: bool = True
+    metadata: Optional[Dict[str, Any]] = None  # Added metadata field
 
     def __post_init__(self):
         if self.message_id is None:
@@ -150,6 +152,8 @@ class ChatMessage:
             self.execution_summary = {}
         if self.errors is None:
             self.errors = []
+        if self.metadata is None:
+            self.metadata = {}
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for MongoDB storage."""

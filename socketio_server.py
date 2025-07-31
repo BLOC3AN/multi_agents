@@ -9,6 +9,15 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any
 
+# Import database models for saving messages
+try:
+    from gui.database.models import get_db_config, ChatMessage, ChatSession, User
+    DATABASE_AVAILABLE = True
+    print("✅ Database models imported successfully")
+except ImportError as e:
+    DATABASE_AVAILABLE = False
+    print(f"⚠️ Database models not available: {e}")
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,6 +47,117 @@ app = socketio.WSGIApp(sio)
 
 # Store connected clients
 connected_clients: Dict[str, Dict[str, Any]] = {}
+
+# Initialize database connection
+db_config = None
+if DATABASE_AVAILABLE:
+    try:
+        db_config = get_db_config()
+        logger.info("✅ Database connection initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database: {e}")
+        DATABASE_AVAILABLE = False
+
+
+def save_message_to_db(user_id: str, session_id: str, user_input: str, agent_response: str,
+                      processing_time: float = 0, success: bool = True, metadata: Dict = None):
+    """Save chat message to MongoDB."""
+    if not DATABASE_AVAILABLE or not db_config:
+        return
+
+    try:
+        # Create message document
+        message = ChatMessage(
+            message_id=str(uuid.uuid4()),
+            session_id=session_id,
+            user_id=user_id,
+            user_input=user_input,
+            agent_response=agent_response,
+            processing_time=processing_time,
+            success=success,
+            metadata=metadata or {},
+            created_at=datetime.utcnow()
+        )
+
+        # Save to MongoDB
+        message_doc = message.to_dict()
+        db_config.messages.insert_one(message_doc)
+
+        # Update session message count
+        db_config.sessions.update_one(
+            {"session_id": session_id},
+            {
+                "$inc": {"total_messages": 1},
+                "$set": {"updated_at": datetime.utcnow()}
+            }
+        )
+
+        logger.info(f"✅ Message saved to database: {message.message_id}")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to save message to database: {e}")
+
+
+def ensure_user_exists(user_id: str, display_name: str = None, email: str = None):
+    """Ensure user exists in database."""
+    if not DATABASE_AVAILABLE or not db_config:
+        return
+
+    try:
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+
+        if not existing_user:
+            # Create new user
+            user = User(
+                user_id=user_id,
+                display_name=display_name or user_id,
+                email=email,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+
+            user_doc = user.to_dict()
+            db_config.users.insert_one(user_doc)
+            logger.info(f"✅ New user created: {user_id}")
+        else:
+            # Update last login
+            db_config.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"last_login": datetime.utcnow()}}
+            )
+
+    except Exception as e:
+        logger.error(f"❌ Failed to ensure user exists: {e}")
+
+
+def ensure_session_exists(session_id: str, user_id: str):
+    """Ensure session exists in database."""
+    if not DATABASE_AVAILABLE or not db_config:
+        return
+
+    try:
+        # Check if session exists
+        existing_session = db_config.sessions.find_one({"session_id": session_id})
+
+        if not existing_session:
+            # Create new session
+            session = ChatSession(
+                session_id=session_id,
+                user_id=user_id,
+                title=f"Session {session_id[:8]}",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                total_messages=0,
+                is_active=True
+            )
+
+            session_doc = session.to_dict()
+            db_config.sessions.insert_one(session_doc)
+            logger.info(f"✅ New session created: {session_id}")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to ensure session exists: {e}")
 
 @sio.event
 def connect(sid, environ):
@@ -70,6 +190,9 @@ def authenticate(sid, data):
         display_name = data.get('display_name', user_id)
         email = data.get('email', f'{user_id}@example.com')
         
+        # Ensure user exists in database
+        ensure_user_exists(user_id, display_name, email)
+
         # Update client info
         if sid in connected_clients:
             connected_clients[sid].update({
@@ -80,7 +203,7 @@ def authenticate(sid, data):
                 'session_id': f"session_{user_id}_{int(time.time())}"
             })
             print(f"✅ Updated client: {connected_clients[sid]}")
-        
+
         # Send success response
         response = {
             "user_id": user_id,
@@ -126,11 +249,17 @@ def process_message(sid, data):
 
         print(f"🔍 Processing message for user: {user_id}, session: {session_id}")
 
+        # Ensure session exists in database
+        ensure_session_exists(session_id, user_id)
+
         # Send processing started notification
         sio.emit('processing_started', {
             "message": "Processing your request...",
             "timestamp": datetime.now().isoformat()
         }, room=sid)
+
+        # Track processing time
+        start_time = time.time()
 
         if MULTIAGENTS_AVAILABLE and agent_graph:
             # Use multiagents system
@@ -181,6 +310,24 @@ def process_message(sid, data):
                 "note": "Multiagents system not available - using echo response"
             }
 
+        # Calculate processing time
+        processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+
+        # Save message to database
+        save_message_to_db(
+            user_id=user_id,
+            session_id=session_id,
+            user_input=message,
+            agent_response=response.get('response', ''),
+            processing_time=processing_time,
+            success=response.get('status') == 'success',
+            metadata={
+                'agent_responses': response.get('agent_responses', {}),
+                'metadata': response.get('metadata', {}),
+                'processing_mode': response.get('processing_mode', 'unknown')
+            }
+        )
+
         print(f"📤 Sending response: {response['response'][:100]}...")
 
         # Send response
@@ -211,6 +358,9 @@ def create_session(sid, data):
             return
 
         session_id = data.get("session_id") or str(uuid.uuid4())
+
+        # Ensure session exists in database
+        ensure_session_exists(session_id, user_id)
 
         # Update client info with new session
         connected_clients[sid]["session_id"] = session_id
