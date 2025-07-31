@@ -32,6 +32,8 @@ else:
 class User:
     """User model for authentication and management."""
     user_id: str
+    password_hash: str  # Password hash for authentication
+    password: str  # Plain password for admin management
     display_name: Optional[str] = None
     email: Optional[str] = None
     created_at: Optional[datetime] = None

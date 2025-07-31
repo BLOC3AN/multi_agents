@@ -330,6 +330,8 @@ function loadUsersData() {
                                 <th>User ID</th>
                                 <th>Display Name</th>
                                 <th>Email</th>
+                                <th>Password</th>
+                                <th>Password Hash</th>
                                 <th>Created</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -349,10 +351,13 @@ function loadUsersData() {
                             <td>${user.user_id}</td>
                             <td>${user.display_name || 'N/A'}</td>
                             <td>${user.email || 'N/A'}</td>
+                            <td><span class="badge bg-info">${user.password}</span></td>
+                            <td><code class="text-muted">${user.password_hash}</code></td>
                             <td>${user.created_at}</td>
                             <td>${statusBadge}</td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary me-1" onclick="viewUser('${user.user_id}')">View</button>
+                                <button class="btn btn-sm btn-outline-warning me-1" onclick="changePassword('${user.user_id}')">Change Pass</button>
                                 <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.user_id}')">Delete</button>
                             </td>
                         </tr>
@@ -361,7 +366,7 @@ function loadUsersData() {
             } else {
                 usersHtml += `
                     <tr>
-                        <td colspan="6" class="text-center text-muted">No users found</td>
+                        <td colspan="8" class="text-center text-muted">No users found</td>
                     </tr>
                 `;
             }
@@ -712,6 +717,14 @@ function showUserModal(user) {
                                 <p class="form-control-plaintext">${user.email || 'N/A'}</p>
                             </div>
                             <div class="col-6">
+                                <label class="form-label fw-bold">Password:</label>
+                                <p class="form-control-plaintext"><span class="badge bg-info">${user.password}</span></p>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold">Password Hash:</label>
+                                <p class="form-control-plaintext"><code class="text-muted">${user.password_hash}</code></p>
+                            </div>
+                            <div class="col-6">
                                 <label class="form-label fw-bold">Created:</label>
                                 <p class="form-control-plaintext">${user.created_at}</p>
                             </div>
@@ -855,6 +868,12 @@ function showAddUserModal() {
                                 <div class="form-text">3-50 characters, letters, numbers, dots, underscores, hyphens only</div>
                             </div>
                             <div class="mb-3">
+                                <label for="newPassword" class="form-label">Password *</label>
+                                <input type="password" class="form-control" id="newPassword" required
+                                       minlength="6" placeholder="Enter password">
+                                <div class="form-text">At least 6 characters</div>
+                            </div>
+                            <div class="mb-3">
                                 <label for="newDisplayName" class="form-label">Display Name</label>
                                 <input type="text" class="form-control" id="newDisplayName"
                                        placeholder="How the user will be displayed">
@@ -909,6 +928,7 @@ function addUser(event) {
 
     const userData = {
         user_id: document.getElementById('newUserId').value.trim(),
+        password: document.getElementById('newPassword').value.trim(),
         display_name: document.getElementById('newDisplayName').value.trim(),
         email: document.getElementById('newEmail').value.trim(),
         is_active: document.getElementById('newUserActive').checked
@@ -1000,6 +1020,109 @@ function showToast(message, type = 'info') {
     // Remove toast element after it's hidden
     toastElement.addEventListener('hidden.bs.toast', () => {
         toastElement.remove();
+    });
+}
+
+function changePassword(userId) {
+    const modalHtml = `
+        <div class="modal fade" id="changePasswordModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">🔐 Change Password</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form id="changePasswordForm" onsubmit="updatePassword(event, '${userId}')">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">User:</label>
+                                <p class="form-control-plaintext">${userId}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label for="newPasswordInput" class="form-label">New Password *</label>
+                                <input type="password" class="form-control" id="newPasswordInput" required
+                                       minlength="6" placeholder="Enter new password">
+                                <div class="form-text">At least 6 characters</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="confirmPasswordInput" class="form-label">Confirm Password *</label>
+                                <input type="password" class="form-control" id="confirmPasswordInput" required
+                                       minlength="6" placeholder="Confirm new password">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-warning">
+                                <span class="spinner-border spinner-border-sm d-none" id="changePasswordSpinner"></span>
+                                🔐 Update Password
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal
+    const existingModal = document.getElementById('changePasswordModal');
+    if (existingModal) existingModal.remove();
+
+    // Add new modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Show modal
+    new bootstrap.Modal(document.getElementById('changePasswordModal')).show();
+}
+
+function updatePassword(event, userId) {
+    event.preventDefault();
+
+    const newPassword = document.getElementById('newPasswordInput').value.trim();
+    const confirmPassword = document.getElementById('confirmPasswordInput').value.trim();
+
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+        showToast('❌ Passwords do not match', 'danger');
+        return;
+    }
+
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const spinner = document.getElementById('changePasswordSpinner');
+
+    // Show loading
+    submitBtn.disabled = true;
+    spinner.classList.remove('d-none');
+
+    fetch(`/api/admin/users/${userId}/password`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: newPassword })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal
+            bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+
+            // Show success message
+            showToast('✅ Password updated successfully!', 'success');
+
+            // Refresh users list
+            refreshUsers();
+        } else {
+            throw new Error(data.message || 'Failed to update password');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating password:', error);
+        showToast('❌ Error: ' + error.message, 'danger');
+    })
+    .finally(() => {
+        // Hide loading
+        submitBtn.disabled = false;
+        spinner.classList.add('d-none');
     });
 }
 </script>

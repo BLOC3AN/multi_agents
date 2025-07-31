@@ -88,9 +88,9 @@
                                 <div class="accordion-body">
                                     <h6>Getting Started:</h6>
                                     <ol>
-                                        <li><strong>Enter your User ID</strong> - This will be your unique identifier</li>
-                                        <li><strong>Add display name</strong> (optional) - How you want to be called</li>
-                                        <li><strong>Click Connect</strong> - Connect to the system</li>
+                                        <li><strong>Enter your Username</strong> - Your unique login identifier</li>
+                                        <li><strong>Enter your Password</strong> - At least 6 characters</li>
+                                        <li><strong>Click Login</strong> - Access the system</li>
                                         <li><strong>Start chatting</strong> - Try these examples:</li>
                                     </ol>
                                     
@@ -105,7 +105,7 @@
 
                                     <h6 class="mt-3">Pro Tips:</h6>
                                     <ul class="list-unstyled">
-                                        <li>💡 Use the same User ID to access your conversation history</li>
+                                        <li>💡 Use the same username to access your conversation history</li>
                                         <li>💡 Try multi-intent queries to see parallel processing in action</li>
                                         <li>💡 Your conversations are automatically saved and can be resumed</li>
                                         <li>💡 Each session has a unique ID for organization</li>
@@ -129,7 +129,7 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     loginBtn.disabled = true;
 });
 
-// Auto-focus on user_id field
-document.getElementById('user_id').focus();
+// Auto-focus on username field
+document.getElementById('username').focus();
 </script>
 {% endblock %}

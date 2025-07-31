@@ -5,6 +5,7 @@ High-performance replacement for Streamlit GUI
 import os
 import sys
 import logging
+import hashlib
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -72,6 +73,18 @@ redis_cache = RedisCache(db_config.redis_client) if db_config.redis_client else 
 
 # SocketIO server URL
 SOCKETIO_URL = os.getenv("SOCKETIO_SERVER_URL", "http://localhost:8001")
+
+
+# Password utilities
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256 with salt."""
+    salt = "multi_agent_salt_2024"  # In production, use random salt per user
+    return hashlib.sha256((password + salt).encode()).hexdigest()
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify password against hash."""
+    return hash_password(password) == password_hash
 
 
 def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
@@ -142,15 +155,43 @@ async def login_submit(
             "socketio_url": SOCKETIO_URL
         })
 
-    # Simple authentication (in production, use proper password hashing)
-    # For demo purposes, we'll accept any username/password combination
-    # You can add real authentication logic here
+    # Authenticate user against database
+    user_doc = db_config.users.find_one({"user_id": username})
+
+    if not user_doc:
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Invalid username or password",
+            "socketio_url": SOCKETIO_URL
+        })
+
+    # Verify password
+    if not verify_password(password, user_doc.get("password_hash", "")):
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Invalid username or password",
+            "socketio_url": SOCKETIO_URL
+        })
+
+    # Check if user is active
+    if not user_doc.get("is_active", True):
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Account is disabled. Please contact administrator.",
+            "socketio_url": SOCKETIO_URL
+        })
+
+    # Update last login
+    db_config.users.update_one(
+        {"user_id": username},
+        {"$set": {"last_login": datetime.utcnow()}}
+    )
 
     # Store user in session
     user_data = {
-        "user_id": username,  # Use username as user_id for compatibility
-        "display_name": username,
-        "email": None,
+        "user_id": username,
+        "display_name": user_doc.get("display_name") or username,
+        "email": user_doc.get("email"),
         "authenticated": True,
         "login_time": datetime.now().isoformat()
     }
@@ -253,6 +294,8 @@ async def get_admin_users(user: Dict[str, Any] = Depends(require_auth)):
                 "user_id": user_doc.get("user_id"),
                 "display_name": user_doc.get("display_name"),
                 "email": user_doc.get("email"),
+                "password": user_doc.get("password", "N/A"),  # Show plain password for admin
+                "password_hash": user_doc.get("password_hash", "")[:20] + "..." if user_doc.get("password_hash") else "N/A",  # Show truncated hash
                 "created_at": created_at_str,
                 "is_active": user_doc.get("is_active", True)
             })
@@ -269,6 +312,7 @@ async def add_user(request: Request, user: Dict[str, Any] = Depends(require_auth
         data = await request.json()
 
         user_id = data.get("user_id", "").strip()
+        password = data.get("password", "").strip()
         display_name = data.get("display_name", "").strip()
         email = data.get("email", "").strip()
         is_active = data.get("is_active", True)
@@ -276,6 +320,10 @@ async def add_user(request: Request, user: Dict[str, Any] = Depends(require_auth
         # Validate user_id
         if not user_id or len(user_id) < 3:
             return {"success": False, "message": "User ID must be at least 3 characters long"}
+
+        # Validate password
+        if not password or len(password) < 6:
+            return {"success": False, "message": "Password must be at least 6 characters long"}
 
         # Check if user already exists
         existing_user = db_config.users.find_one({"user_id": user_id})
@@ -286,6 +334,8 @@ async def add_user(request: Request, user: Dict[str, Any] = Depends(require_auth
         from gui.database.models import User
         new_user = User(
             user_id=user_id,
+            password_hash=hash_password(password),
+            password=password,  # Store plain password for admin management
             display_name=display_name or user_id,
             email=email if email else None,
             is_active=is_active,
@@ -352,6 +402,48 @@ async def delete_user(user_id: str, user: Dict[str, Any] = Depends(require_auth)
     except Exception as e:
         logger.error(f"Error deleting user: {e}")
         return {"success": False, "message": "Failed to delete user"}
+
+
+@app.put("/api/admin/users/{user_id}/password")
+async def update_user_password(user_id: str, request: Request, user: Dict[str, Any] = Depends(require_auth)):
+    """Update user password."""
+    try:
+        data = await request.json()
+        new_password = data.get("password", "").strip()
+
+        # Validate password
+        if not new_password or len(new_password) < 6:
+            return {"success": False, "message": "Password must be at least 6 characters long"}
+
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            return {"success": False, "message": f"User '{user_id}' not found"}
+
+        # Update password
+        result = db_config.users.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "password": new_password,
+                    "password_hash": hash_password(new_password),
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+
+        if result.modified_count > 0:
+            logger.info(f"🔐 Password updated for user: {user_id}")
+            return {
+                "success": True,
+                "message": f"Password updated successfully for '{user_id}'"
+            }
+        else:
+            return {"success": False, "message": "Failed to update password"}
+
+    except Exception as e:
+        logger.error(f"Error updating password: {e}")
+        return {"success": False, "message": "Failed to update password"}
 
 
 @app.get("/api/admin/sessions")
