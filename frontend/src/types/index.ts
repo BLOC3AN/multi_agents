@@ -10,6 +10,20 @@ export interface User {
   preferences?: Record<string, any>;
 }
 
+// Login request types
+export interface LoginRequest {
+  user_id: string;
+  password: string;
+}
+
+// Login response types
+export interface LoginResponse {
+  success: boolean;
+  user?: User;
+  message?: string;
+  error?: string;
+}
+
 // Authentication types
 export interface AuthState {
   isAuthenticated: boolean;
@@ -108,4 +122,35 @@ export interface BaseComponentProps {
 export interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAuth?: boolean;
+}
+
+// Admin Dashboard types
+export interface AdminUser {
+  user_id: string;
+  display_name?: string;
+  email?: string;
+  is_active: boolean;
+  created_at?: string;
+  last_login?: string;
+  has_password: boolean;
+}
+
+export interface AdminSession {
+  session_id: string;
+  user_id: string;
+  title?: string;
+  created_at?: string;
+  updated_at?: string;
+  total_messages: number;
+  is_active: boolean;
+}
+
+export interface AdminStats {
+  total_users: number;
+  active_users: number;
+  total_sessions: number;
+  active_sessions: number;
+  total_messages: number;
+  recent_sessions_24h: number;
+  recent_messages_24h: number;
 }

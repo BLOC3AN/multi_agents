@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Theme, ThemeState } from '@/types';
+import type { Theme, ThemeState } from '../types';
 
 interface ThemeContextType extends ThemeState {
   setTheme: (theme: Theme) => void;
@@ -52,13 +52,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   // Apply theme to document
   useEffect(() => {
     const root = window.document.documentElement;
-    
+
     // Remove previous theme classes
     root.classList.remove('light', 'dark');
-    
+
     // Add current theme class
     root.classList.add(resolvedTheme);
-    
+
+    // Set data-theme attribute for CSS variables
+    root.setAttribute('data-theme', resolvedTheme);
+
     // Update meta theme-color for mobile browsers
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {

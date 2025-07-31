@@ -6,39 +6,45 @@ import eventlet
 import logging
 import time
 import uuid
+import sys
+import os
 from datetime import datetime
 from typing import Dict, Any
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
+
+# Import enhanced logging
+from src.utils.logger import socketio_logger, system_logger
 
 # Import database models for saving messages
 try:
-    from gui.database.models import get_db_config, ChatMessage, ChatSession, User
+    from src.database.models import get_db_config, ChatMessage, ChatSession, User
     DATABASE_AVAILABLE = True
-    print("✅ Database models imported successfully")
+    system_logger.info("✅ Database models imported successfully")
 except ImportError as e:
     DATABASE_AVAILABLE = False
-    print(f"⚠️ Database models not available: {e}")
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    system_logger.warning(f"⚠️ Database models not available: {e}")
 
 # Try to import multiagents system
 try:
     from graph import create_agent_graph, create_initial_state
     MULTIAGENTS_AVAILABLE = True
-    logger.info("✅ Multiagents system available")
+    system_logger.info("✅ Multiagents system available")
 except ImportError as e:
     MULTIAGENTS_AVAILABLE = False
-    logger.warning(f"⚠️ Multiagents system not available: {e}")
+    system_logger.warning(f"⚠️ Multiagents system not available: {e}")
 
 # Initialize agent graph if available
 agent_graph = None
 if MULTIAGENTS_AVAILABLE:
     try:
         agent_graph = create_agent_graph()
-        logger.info("✅ Agent graph initialized successfully")
+        system_logger.info("✅ Agent graph initialized successfully")
     except Exception as e:
-        logger.error(f"❌ Failed to initialize agent graph: {e}")
+        system_logger.error(f"❌ Failed to initialize agent graph: {e}")
         MULTIAGENTS_AVAILABLE = False
 
 # Create SocketIO server
@@ -53,9 +59,9 @@ db_config = None
 if DATABASE_AVAILABLE:
     try:
         db_config = get_db_config()
-        logger.info("✅ Database connection initialized")
+        system_logger.info("✅ Database connection initialized")
     except Exception as e:
-        logger.error(f"❌ Failed to initialize database: {e}")
+        system_logger.error(f"❌ Failed to initialize database: {e}")
         DATABASE_AVAILABLE = False
 
 
@@ -92,10 +98,10 @@ def save_message_to_db(user_id: str, session_id: str, user_input: str, agent_res
             }
         )
 
-        logger.info(f"✅ Message saved to database: {message.message_id}")
+        system_logger.info(f"✅ Message saved to database: {message.message_id}")
 
     except Exception as e:
-        logger.error(f"❌ Failed to save message to database: {e}")
+        system_logger.error(f"❌ Failed to save message to database: {e}")
 
 
 def ensure_user_exists(user_id: str, display_name: str = None, email: str = None):
@@ -119,7 +125,7 @@ def ensure_user_exists(user_id: str, display_name: str = None, email: str = None
 
             user_doc = user.to_dict()
             db_config.users.insert_one(user_doc)
-            logger.info(f"✅ New user created: {user_id}")
+            system_logger.info(f"✅ New user created: {user_id}")
         else:
             # Update last login
             db_config.users.update_one(
@@ -128,7 +134,7 @@ def ensure_user_exists(user_id: str, display_name: str = None, email: str = None
             )
 
     except Exception as e:
-        logger.error(f"❌ Failed to ensure user exists: {e}")
+        system_logger.error(f"❌ Failed to ensure user exists: {e}")
 
 
 def ensure_session_exists(session_id: str, user_id: str):
@@ -154,16 +160,15 @@ def ensure_session_exists(session_id: str, user_id: str):
 
             session_doc = session.to_dict()
             db_config.sessions.insert_one(session_doc)
-            logger.info(f"✅ New session created: {session_id}")
+            system_logger.info(f"✅ New session created: {session_id}")
 
     except Exception as e:
-        logger.error(f"❌ Failed to ensure session exists: {e}")
+        system_logger.error(f"❌ Failed to ensure session exists: {e}")
 
 @sio.event
 def connect(sid, environ):
     """Handle client connection."""
-    print(f"🔌 Client connected: {sid}")
-    logger.info(f"🔌 Client connected: {sid}")
+    socketio_logger.log_socket_event("connect", data={"sid": sid})
     connected_clients[sid] = {
         'connected_at': datetime.now(),
         'user_id': None,
@@ -174,8 +179,8 @@ def connect(sid, environ):
 @sio.event
 def disconnect(sid):
     """Handle client disconnection."""
-    print(f"🔌 Client disconnected: {sid}")
-    logger.info(f"🔌 Client disconnected: {sid}")
+    user_id = connected_clients.get(sid, {}).get('user_id')
+    socketio_logger.log_socket_event("disconnect", user_id=user_id, data={"sid": sid})
     if sid in connected_clients:
         del connected_clients[sid]
 
@@ -183,7 +188,7 @@ def disconnect(sid):
 def authenticate(sid, data):
     """Handle user authentication."""
     print(f"🔐 AUTH: {sid} -> {data}")
-    logger.info(f"🔐 AUTH: {sid} -> {data}")
+    system_logger.info(f"🔐 AUTH: {sid} -> {data}")
     
     try:
         user_id = data.get('user_id', 'anonymous')
@@ -214,18 +219,18 @@ def authenticate(sid, data):
         
         sio.emit('auth_success', response, room=sid)
         print(f"✅ AUTH SUCCESS: {user_id}")
-        logger.info(f"✅ AUTH SUCCESS: {user_id}")
+        system_logger.info(f"✅ AUTH SUCCESS: {user_id}")
         
     except Exception as e:
         print(f"❌ AUTH ERROR: {e}")
-        logger.error(f"❌ AUTH ERROR: {e}")
+        system_logger.error(f"❌ AUTH ERROR: {e}")
         sio.emit('auth_error', {"error": str(e)}, room=sid)
 
 @sio.event
 def process_message(sid, data):
     """Process user message through multi-agent system."""
     print(f"📨 MESSAGE: {sid} -> {data}")
-    logger.info(f"📨 MESSAGE: {sid} -> {data}")
+    system_logger.info(f"📨 MESSAGE: {sid} -> {data}")
 
     try:
         message = data.get('message', '')
@@ -333,18 +338,18 @@ def process_message(sid, data):
         # Send response
         sio.emit('message_response', response, room=sid)
         print(f"✅ RESPONSE SENT to {user_id}")
-        logger.info(f"✅ RESPONSE SENT to {user_id}")
+        system_logger.info(f"✅ RESPONSE SENT to {user_id}")
 
     except Exception as e:
         print(f"❌ MESSAGE ERROR: {e}")
-        logger.error(f"❌ MESSAGE ERROR: {e}")
+        system_logger.error(f"❌ MESSAGE ERROR: {e}")
         sio.emit('processing_error', {"error": str(e)}, room=sid)
 
 @sio.event
 def create_session(sid, data):
     """Create a new chat session."""
     print(f"📝 CREATE SESSION: {sid} -> {data}")
-    logger.info(f"📝 CREATE SESSION: {sid} -> {data}")
+    system_logger.info(f"📝 CREATE SESSION: {sid} -> {data}")
 
     try:
         client_info = connected_clients.get(sid, {})
@@ -376,18 +381,18 @@ def create_session(sid, data):
 
         # Send success response
         sio.emit('session_created', session_data, room=sid)
-        logger.info(f"✅ Session created: {session_id} for user {user_id}")
+        system_logger.info(f"✅ Session created: {session_id} for user {user_id}")
 
     except Exception as e:
         print(f"❌ SESSION CREATION ERROR: {e}")
-        logger.error(f"❌ SESSION CREATION ERROR: {e}")
+        system_logger.error(f"❌ SESSION CREATION ERROR: {e}")
         sio.emit('error', {"error": str(e)}, room=sid)
 
 @sio.event
 def join_session(sid, data):
     """Join an existing chat session."""
     print(f"🔗 JOIN SESSION: {sid} -> {data}")
-    logger.info(f"🔗 JOIN SESSION: {sid} -> {data}")
+    system_logger.info(f"🔗 JOIN SESSION: {sid} -> {data}")
 
     try:
         client_info = connected_clients.get(sid, {})
@@ -421,11 +426,11 @@ def join_session(sid, data):
 
         # Send success response
         sio.emit('session_joined', session_data, room=sid)
-        logger.info(f"✅ User {user_id} joined session: {session_id}")
+        system_logger.info(f"✅ User {user_id} joined session: {session_id}")
 
     except Exception as e:
         print(f"❌ SESSION JOIN ERROR: {e}")
-        logger.error(f"❌ SESSION JOIN ERROR: {e}")
+        system_logger.error(f"❌ SESSION JOIN ERROR: {e}")
         sio.emit('error', {"error": str(e)}, room=sid)
 
 @sio.event
@@ -439,5 +444,5 @@ def health_check(sid):
 
 if __name__ == "__main__":
     print("🚀 Starting SocketIO server on port 8001...")
-    logger.info("🚀 Starting SocketIO server on port 8001...")
+    system_logger.info("🚀 Starting SocketIO server on port 8001...")
     eventlet.wsgi.server(eventlet.listen(('0.0.0.0', 8001)), app)

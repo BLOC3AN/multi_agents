@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { User, AuthState } from '@/types';
+import type { User, AuthState, LoginRequest } from '../types';
+import { login as apiLogin, logout as apiLogout } from '../services/simple-api';
 
 interface AuthContextType extends AuthState {
-  login: (userData: Partial<User>) => Promise<void>;
+  login: (credentials: LoginRequest) => Promise<void>;
   logout: () => void;
 }
 
@@ -76,39 +77,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     checkExistingSession();
   }, []);
 
-  const login = async (userData: Partial<User>) => {
+  const login = async (credentials: LoginRequest) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
 
       // Validate required fields
-      if (!userData.user_id) {
-        throw new Error('User ID is required');
+      if (!credentials.user_id || !credentials.password) {
+        throw new Error('User ID and password are required');
       }
 
-      // Create user object
-      const user: User = {
-        user_id: userData.user_id,
-        display_name: userData.display_name || userData.user_id,
-        email: userData.email,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      console.log('🔐 Attempting login with:', { user_id: credentials.user_id });
+
+      // Call authentication API
+      const response = await apiLogin(credentials);
+
+      console.log('🔐 Login response:', response);
+
+      if (!response.success || !response.data?.user) {
+        throw new Error(response.error || 'Authentication failed');
+      }
+
+      const user = response.data.user;
 
       // Save to localStorage
       localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('auth_token', 'authenticated'); // Simple token for now
 
       dispatch({ type: 'SET_USER', payload: user });
+      console.log('✅ Login successful for user:', user.user_id);
     } catch (error) {
+      console.error('❌ Login error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       dispatch({ type: 'SET_ERROR', payload: errorMessage });
       throw error;
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('user');
-    dispatch({ type: 'LOGOUT' });
+  const logout = async () => {
+    try {
+      // Call logout API
+      await apiLogout();
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      // Always clear local storage and state
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth_token');
+      dispatch({ type: 'LOGOUT' });
+    }
   };
 
   const value: AuthContextType = {

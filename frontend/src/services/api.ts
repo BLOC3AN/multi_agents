@@ -1,64 +1,15 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { ApiResponse, ProcessRequest, ProcessResponse } from '@/types';
+import axios from 'axios';
+import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import type { ApiResponse, ProcessRequest, ProcessResponse, LoginRequest, LoginResponse } from '../types';
 
-// Create axios instance with default config
-const createApiInstance = (): AxiosInstance => {
-  const instance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
-    timeout: 30000, // 30 seconds
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  // Request interceptor
-  instance.interceptors.request.use(
-    (config) => {
-      // Add auth token if available
-      const user = localStorage.getItem('user');
-      if (user) {
-        try {
-          const userData = JSON.parse(user);
-          config.headers['X-User-ID'] = userData.user_id;
-        } catch (error) {
-          console.warn('Failed to parse user data from localStorage');
-        }
-      }
-
-      console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-      return config;
-    },
-    (error) => {
-      console.error('❌ Request interceptor error:', error);
-      return Promise.reject(error);
-    }
-  );
-
-  // Response interceptor
-  instance.interceptors.response.use(
-    (response: AxiosResponse) => {
-      console.log(`✅ API Response: ${response.status} ${response.config.url}`);
-      return response;
-    },
-    (error) => {
-      console.error('❌ API Error:', error.response?.status, error.response?.data || error.message);
-      
-      // Handle specific error cases
-      if (error.response?.status === 401) {
-        // Unauthorized - clear user data and redirect to login
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-      }
-      
-      return Promise.reject(error);
-    }
-  );
-
-  return instance;
-};
-
-// Create API instance
-const api = createApiInstance();
+// Create simple axios instance
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 // API service class
 export class ApiService {
@@ -79,13 +30,13 @@ export class ApiService {
   // Generic request method
   private async request<T = any>(config: AxiosRequestConfig): Promise<ApiResponse<T>> {
     try {
-      const response = await this.api.request<T>(config);
+      const response: AxiosResponse<T> = await this.api(config);
       return {
         success: true,
         data: response.data,
       };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'An error occurred';
+      const errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message || 'An error occurred';
       return {
         success: false,
         error: errorMessage,
@@ -98,6 +49,30 @@ export class ApiService {
     return this.request({
       method: 'GET',
       url: '/health',
+    });
+  }
+
+  // Authentication
+  async login(credentials: LoginRequest): Promise<ApiResponse<LoginResponse>> {
+    console.log('🔐 API login called with:', { user_id: credentials.user_id });
+    try {
+      const result = await this.request<LoginResponse>({
+        method: 'POST',
+        url: '/auth/login',
+        data: credentials,
+      });
+      console.log('🔐 API login result:', result);
+      return result;
+    } catch (error) {
+      console.error('🔐 API login error:', error);
+      throw error;
+    }
+  }
+
+  async logout(): Promise<ApiResponse> {
+    return this.request({
+      method: 'POST',
+      url: '/auth/logout',
     });
   }
 
@@ -158,17 +133,20 @@ export class ApiService {
   }
 }
 
+// Create service instance
+const apiService = ApiService.getInstance();
+
 // Export singleton instance
-export const apiService = ApiService.getInstance();
+export { apiService };
 
 // Export individual methods for convenience
-export const {
-  healthCheck,
-  processMessage,
-  getAgents,
-  getMetrics,
-  getSessions,
-  createSession,
-  getSessionHistory,
-  updateSessionName,
-} = apiService;
+export const healthCheck = () => apiService.healthCheck();
+export const login = (credentials: LoginRequest) => apiService.login(credentials);
+export const logout = () => apiService.logout();
+export const processMessage = (request: ProcessRequest) => apiService.processMessage(request);
+export const getAgents = () => apiService.getAgents();
+export const getMetrics = () => apiService.getMetrics();
+export const getSessions = (userId: string) => apiService.getSessions(userId);
+export const createSession = (userId: string, sessionName?: string) => apiService.createSession(userId, sessionName);
+export const getSessionHistory = (sessionId: string) => apiService.getSessionHistory(sessionId);
+export const updateSessionName = (sessionId: string, newName: string) => apiService.updateSessionName(sessionId, newName);

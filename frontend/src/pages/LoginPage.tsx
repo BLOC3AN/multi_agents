@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const LoginPage: React.FC = () => {
@@ -8,8 +8,7 @@ const LoginPage: React.FC = () => {
 
   const [formData, setFormData] = useState({
     user_id: '',
-    display_name: '',
-    email: '',
+    password: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -27,11 +26,15 @@ const LoginPage: React.FC = () => {
       return;
     }
 
+    if (!formData.password.trim()) {
+      setFormError('Password is required');
+      return;
+    }
+
     try {
       await login({
         user_id: formData.user_id.trim(),
-        display_name: formData.display_name.trim() || undefined,
-        email: formData.email.trim() || undefined,
+        password: formData.password.trim(),
       });
 
       navigate('/chat');
@@ -76,38 +79,33 @@ const LoginPage: React.FC = () => {
                 value={formData.user_id}
                 onChange={handleInputChange}
                 disabled={loading}
+                autoComplete="username"
               />
             </div>
             <div>
-              <label htmlFor="display_name" className="sr-only">
-                Display Name
+              <label htmlFor="password" className="sr-only">
+                Password
               </label>
               <input
-                id="display_name"
-                name="display_name"
-                type="text"
-                className="input rounded-none"
-                placeholder="Display Name (optional)"
-                value={formData.display_name}
-                onChange={handleInputChange}
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
+                id="password"
+                name="password"
+                type="password"
+                required
                 className="input rounded-b-md"
-                placeholder="Email (optional)"
-                value={formData.email}
+                placeholder="Password"
+                value={formData.password}
                 onChange={handleInputChange}
                 disabled={loading}
+                autoComplete="current-password"
               />
             </div>
+          </div>
+
+          <div className="text-center text-sm text-gray-600 dark:text-gray-400">
+            <p>Demo accounts:</p>
+            <p><strong>admin</strong> / admin123</p>
+            <p><strong>user1</strong> / user1123</p>
+            <p><strong>user2</strong> / user2123</p>
           </div>
 
           <div>
@@ -122,7 +120,7 @@ const LoginPage: React.FC = () => {
                   Connecting...
                 </>
               ) : (
-                '🚀 Connect to Multi-Agent System'
+                '🔐 Sign In'
               )}
             </button>
           </div>

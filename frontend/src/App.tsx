@@ -1,14 +1,14 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from '@/contexts/AuthContext';
-import { ThemeProvider } from '@/contexts/ThemeContext';
-import { ChannelProvider } from '@/contexts/ChannelContext';
-import ProtectedRoute from '@/components/ProtectedRoute';
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { ChannelProvider } from './contexts/ChannelContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Lazy load pages for code splitting
-const LoginPage = lazy(() => import('@/pages/LoginPage'));
-const ChatPage = lazy(() => import('@/pages/ChatPage'));
-const AdminPage = lazy(() => import('@/pages/AdminPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
 
 // Loading component
 const LoadingSpinner: React.FC = () => (

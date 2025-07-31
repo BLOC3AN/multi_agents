@@ -2,14 +2,15 @@
 # Services: SocketIO Server, React Frontend, Redis (Docker minimal)
 
 .PHONY: help install setup dev up down restart logs clean clean-all status health
-.PHONY: up-redis up-socketio up-react down-redis down-socketio down-react
-.PHONY: logs-socketio logs-redis logs-react restart-socketio restart-react
+.PHONY: up-redis up-socketio up-auth up-react down-redis down-socketio down-auth down-react
+.PHONY: logs-socketio logs-auth logs-redis logs-react restart-socketio restart-auth restart-react
 .PHONY: test test-coverage lint format format-check build docker-build docker-clean docker-up docker-down
-.PHONY: dev-setup dev-check quick-start quick-stop help-detailed open-socketio open-react
+.PHONY: dev-setup dev-check quick-start quick-stop help-detailed open-socketio open-auth open-react
 .PHONY: install-react setup-react dev-react build-react
 
 # Process management
 SOCKETIO_PID_FILE := .socketio.pid
+AUTH_PID_FILE := .auth.pid
 REACT_PID_FILE := .react.pid
 
 # Python executable detection
@@ -42,7 +43,7 @@ install: check-deps ## Install Python dependencies
 setup: ## Setup environment (create directories, check .env)
 	@echo "🔧 Setting up environment..."
 	@mkdir -p logs
-	@touch logs/socketio.log logs/react.log
+	@touch logs/socketio.log logs/auth.log logs/react.log
 	@if [ ! -f ".env" ]; then \
 	    echo "⚠️  .env not found, copying from template..."; \
 	    if [ -f ".env.example" ]; then \
@@ -59,7 +60,7 @@ setup: ## Setup environment (create directories, check .env)
 dev: dev-react ## Quick development start with React
 
 # Start all services with React (recommended)
-up: up-redis up-socketio up-react ## Start all services with React
+up: up-redis up-socketio up-auth up-react ## Start all services with React
 	@echo "✅ All services started!"
 	@make status
 
@@ -80,6 +81,18 @@ up-socketio: ## Start SocketIO server (Python)
 	    echo "📋 Logs: tail -f logs/socketio.log"; \
 	fi
 
+# Start Authentication API server
+up-auth: ## Start Authentication API server
+	@echo "🔐 Starting Authentication API server..."
+	@if [ -f $(AUTH_PID_FILE) ] && [ -s $(AUTH_PID_FILE) ] && ps -p $$(cat $(AUTH_PID_FILE)) > /dev/null 2>&1; then \
+	    echo "⚠️  Auth API already running (PID: $$(cat $(AUTH_PID_FILE)))"; \
+	else \
+	    echo "$$(date '+%Y-%m-%d %H:%M:%S') - Starting Auth API server..." >> logs/auth.log; \
+	    python3 auth_server.py >> logs/auth.log 2>&1 & echo $$! > $(AUTH_PID_FILE); \
+	    echo "✅ Auth API started on port 8000 (PID: $$(cat $(AUTH_PID_FILE)))"; \
+	    echo "📋 Logs: tail -f logs/auth.log"; \
+	fi
+
 # Legacy GUI commands removed - migrated to React frontend
 
 # React Frontend Commands
@@ -96,12 +109,14 @@ setup-react: install-react ## Setup React frontend environment
 # Start React development server
 up-react: ## Start React development server
 	@echo "⚛️  Starting React development server..."
-	@if [ -f $(REACT_PID_FILE) ]; then \
+	@if [ -f $(REACT_PID_FILE) ] && [ -s $(REACT_PID_FILE) ] && ps -p $$(cat $(REACT_PID_FILE)) > /dev/null 2>&1; then \
 	    echo "⚠️  React already running (PID: $$(cat $(REACT_PID_FILE)))"; \
 	else \
 	    echo "$$(date '+%Y-%m-%d %H:%M:%S') - Starting React dev server..." >> logs/react.log; \
-	    cd frontend && npm run dev >> ../logs/react.log 2>&1 & echo $$! > ../$(REACT_PID_FILE); \
-	    echo "✅ React started on port 3000 (PID: $$(cat $(REACT_PID_FILE)))"; \
+	    cd frontend && npm run dev >> ../logs/react.log 2>&1 & \
+	    REACT_PID=$$!; \
+	    echo $$REACT_PID > ../$(REACT_PID_FILE); \
+	    echo "✅ React started on port 3000 (PID: $$REACT_PID)"; \
 	    echo "📋 Logs: tail -f logs/react.log"; \
 	    echo "🌐 Access: http://localhost:3000"; \
 	fi
@@ -120,7 +135,7 @@ dev-react: install setup-react up-redis up-socketio up-react ## Quick developmen
 	@echo "  - SocketIO: http://localhost:8001"
 
 # Stop all services
-down: down-react down-socketio down-redis ## Stop all services
+down: down-react down-auth down-socketio down-redis ## Stop all services
 	@echo "✅ All services stopped!"
 
 # Stop Redis
@@ -137,6 +152,17 @@ down-socketio: ## Stop SocketIO server
 	    echo "✅ SocketIO stopped"; \
 	else \
 	    echo "⚠️  SocketIO not running"; \
+	fi
+
+# Stop Authentication API server
+down-auth: ## Stop Authentication API server
+	@echo "🛑 Stopping Auth API server..."
+	@if [ -f $(AUTH_PID_FILE) ]; then \
+	    kill $$(cat $(AUTH_PID_FILE)) 2>/dev/null || true; \
+	    rm -f $(AUTH_PID_FILE); \
+	    echo "✅ Auth API stopped"; \
+	else \
+	    echo "⚠️  Auth API not running"; \
 	fi
 
 # Legacy GUI stop command removed
@@ -159,13 +185,15 @@ restart-react: down-react up-react ## Restart React development server
 
 restart-socketio: down-socketio up-socketio ## Restart SocketIO server
 
+restart-auth: down-auth up-auth ## Restart Authentication API server
+
 # Legacy GUI restart command removed
 
 # Show logs
 logs: ## Show all logs (follow mode)
 	@echo "📋 Showing all logs (Ctrl+C to exit)..."
-	@echo "📁 Log files: logs/socketio.log logs/react.log"
-	@tail -f logs/socketio.log logs/react.log 2>/dev/null || echo "⚠️  Some log files may not exist"
+	@echo "📁 Log files: logs/socketio.log logs/auth.log logs/react.log"
+	@tail -f logs/socketio.log logs/auth.log logs/react.log 2>/dev/null || echo "⚠️  Some log files may not exist"
 
 logs-react: ## Show React logs
 	@echo "📋 React development server logs:"
@@ -174,6 +202,10 @@ logs-react: ## Show React logs
 logs-socketio: ## Show SocketIO logs
 	@echo "📋 SocketIO logs:"
 	@tail -f logs/socketio.log 2>/dev/null || echo "⚠️  SocketIO log not found"
+
+logs-auth: ## Show Authentication API logs
+	@echo "📋 Auth API logs:"
+	@tail -f logs/auth.log 2>/dev/null || echo "⚠️  Auth API log not found"
 
 # Legacy GUI logs command removed
 
@@ -193,6 +225,15 @@ status: ## Show service status
 	    fi \
 	else \
 	    echo "⭕ SocketIO: Not running"; \
+	fi
+	@if [ -f $(AUTH_PID_FILE) ]; then \
+	    if ps -p $$(cat $(AUTH_PID_FILE)) > /dev/null 2>&1; then \
+	        echo "✅ Auth API: Running (PID: $$(cat $(AUTH_PID_FILE))) - http://localhost:8000"; \
+	    else \
+	        echo "❌ Auth API: Dead process"; rm -f $(AUTH_PID_FILE); \
+	    fi \
+	else \
+	    echo "⭕ Auth API: Not running"; \
 	fi
 	# Legacy GUI status check removed
 	@if [ -f $(REACT_PID_FILE) ]; then \
@@ -368,6 +409,7 @@ help-detailed: ## Show detailed help with examples
 	@echo ""
 	@echo "🌐 Access Points:"
 	@echo "  - React Frontend: http://localhost:3000"
+	@echo "  - Auth API: http://localhost:8000"
 	@echo "  - SocketIO: http://localhost:8001"
 	@echo "  - Redis: localhost:6379"
 
@@ -375,6 +417,10 @@ help-detailed: ## Show detailed help with examples
 open-react: ## Open React frontend in browser
 	@echo "🌐 Opening React frontend..."
 	@open http://localhost:3000 2>/dev/null || xdg-open http://localhost:3000 2>/dev/null || echo "Please open http://localhost:3000 manually"
+
+open-auth: ## Open Auth API in browser
+	@echo "🌐 Opening Auth API..."
+	@open http://localhost:8000/docs 2>/dev/null || xdg-open http://localhost:8000/docs 2>/dev/null || echo "Please open http://localhost:8000/docs manually"
 
 # Legacy GUI open command removed
 

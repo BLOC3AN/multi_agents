@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
-import { ChatSession, ChatMessage } from '@/types';
+import type { ChatSession, ChatMessage } from '../types';
 
 interface ChannelState {
   sessions: ChatSession[];
@@ -19,6 +19,9 @@ interface ChannelContextType extends ChannelState {
   clearMessages: () => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  createDefaultSession: () => ChatSession;
+  ensureActiveSession: () => ChatSession;
+  clearAll: () => void;
 }
 
 const ChannelContext = createContext<ChannelContextType | undefined>(undefined);
@@ -33,7 +36,8 @@ type ChannelAction =
   | { type: 'ADD_MESSAGE'; payload: ChatMessage }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null };
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'CLEAR_ALL' };
 
 const channelReducer = (state: ChannelState, action: ChannelAction): ChannelState => {
   switch (action.type) {
@@ -88,7 +92,16 @@ const channelReducer = (state: ChannelState, action: ChannelAction): ChannelStat
     
     case 'SET_ERROR':
       return { ...state, error: action.payload };
-    
+
+    case 'CLEAR_ALL':
+      return {
+        sessions: [],
+        currentSession: null,
+        messages: [],
+        loading: false,
+        error: null,
+      };
+
     default:
       return state;
   }
@@ -143,6 +156,41 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({
     dispatch({ type: 'SET_ERROR', payload: error });
   }, []);
 
+  const createDefaultSession = useCallback((): ChatSession => {
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const now = new Date().toISOString();
+
+    const newSession: ChatSession = {
+      session_id: sessionId,
+      session_name: `Chat ${new Date().toLocaleTimeString()}`,
+      user_id: '', // Will be set by useSocket
+      created_at: now,
+      updated_at: now,
+      is_active: true,
+      message_count: 0,
+      last_message_preview: '',
+    };
+
+    return newSession;
+  }, []);
+
+  const ensureActiveSession = useCallback((): ChatSession => {
+    if (state.currentSession) {
+      return state.currentSession;
+    }
+
+    // Create new default session
+    const newSession = createDefaultSession();
+    addSession(newSession);
+    setCurrentSession(newSession);
+
+    return newSession;
+  }, [state.currentSession, createDefaultSession, addSession, setCurrentSession]);
+
+  const clearAll = useCallback(() => {
+    dispatch({ type: 'CLEAR_ALL' });
+  }, []);
+
   const value: ChannelContextType = {
     ...state,
     setCurrentSession,
@@ -154,6 +202,9 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({
     clearMessages,
     setLoading,
     setError,
+    createDefaultSession,
+    ensureActiveSession,
+    clearAll,
   };
 
   return (

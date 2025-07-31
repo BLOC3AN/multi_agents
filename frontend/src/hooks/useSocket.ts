@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { SocketState, User, ChatMessage } from '@/types';
-import { useAuth } from '@/contexts/AuthContext';
-import { useChannel } from '@/contexts/ChannelContext';
+import type { SocketState, User, ChatMessage } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { useChannel } from '../contexts/ChannelContext';
 
 interface UseSocketReturn extends SocketState {
   sendMessage: (message: string, sessionId?: string) => void;
