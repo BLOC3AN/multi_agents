@@ -206,13 +206,22 @@ function loadDashboardData() {
 }
 
 function loadMetrics() {
-    // Simulate loading metrics (replace with actual API calls)
-    setTimeout(() => {
-        document.getElementById('totalUsers').textContent = '42';
-        document.getElementById('activeSessions').textContent = '8';
-        document.getElementById('totalMessages').textContent = '1,234';
-        document.getElementById('systemHealth').textContent = '98%';
-    }, 1000);
+    // Load real metrics from API
+    fetch('/api/admin/metrics')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('totalUsers').textContent = data.total_users;
+            document.getElementById('activeSessions').textContent = data.active_sessions;
+            document.getElementById('totalMessages').textContent = data.total_messages.toLocaleString();
+            document.getElementById('systemHealth').textContent = data.system_health;
+        })
+        .catch(error => {
+            console.error('Error loading metrics:', error);
+            document.getElementById('totalUsers').textContent = 'Error';
+            document.getElementById('activeSessions').textContent = 'Error';
+            document.getElementById('totalMessages').textContent = 'Error';
+            document.getElementById('systemHealth').textContent = 'Error';
+        });
 }
 
 function loadSystemStats() {
@@ -301,48 +310,66 @@ function loadTabData(target) {
 }
 
 function loadUsersData() {
-    const usersHtml = `
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
+    fetch('/api/admin/users')
+        .then(response => response.json())
+        .then(data => {
+            let usersHtml = `
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Display Name</th>
+                                <th>Email</th>
+                                <th>Created</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            if (data.users && data.users.length > 0) {
+                data.users.forEach(user => {
+                    const statusBadge = user.is_active ?
+                        '<span class="badge bg-success">Active</span>' :
+                        '<span class="badge bg-secondary">Inactive</span>';
+
+                    usersHtml += `
+                        <tr>
+                            <td>${user.user_id}</td>
+                            <td>${user.display_name || 'N/A'}</td>
+                            <td>${user.email || 'N/A'}</td>
+                            <td>${user.created_at}</td>
+                            <td>${statusBadge}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary">View</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } else {
+                usersHtml += `
                     <tr>
-                        <th>User ID</th>
-                        <th>Display Name</th>
-                        <th>Email</th>
-                        <th>Created</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <td colspan="6" class="text-center text-muted">No users found</td>
                     </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>admin</td>
-                        <td>Administrator</td>
-                        <td>admin@example.com</td>
-                        <td>2024-01-01</td>
-                        <td><span class="badge bg-success">Active</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary">View</button>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>user123</td>
-                        <td>John Doe</td>
-                        <td>john@example.com</td>
-                        <td>2024-01-15</td>
-                        <td><span class="badge bg-success">Active</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary">View</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    setTimeout(() => {
-        document.getElementById('usersTable').innerHTML = usersHtml;
-    }, 800);
+                `;
+            }
+
+            usersHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            document.getElementById('usersTable').innerHTML = usersHtml;
+        })
+        .catch(error => {
+            console.error('Error loading users:', error);
+            document.getElementById('usersTable').innerHTML = `
+                <div class="alert alert-danger">Error loading users: ${error.message}</div>
+            `;
+        });
 }
 
 function loadSessionsData() {
@@ -391,78 +418,101 @@ function loadSessionsData() {
 }
 
 function loadMessagesData() {
-    const messagesHtml = `
-        <div class="row g-3 mb-3">
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5>1,234</h5>
-                        <small>Total Messages</small>
+    fetch('/api/admin/messages')
+        .then(response => response.json())
+        .then(data => {
+            const stats = data.stats || {};
+            const messages = data.recent_messages || [];
+
+            let messagesHtml = `
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5>${stats.total_messages || 0}</h5>
+                                <small>Total Messages</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5>${stats.successful_messages || 0}</h5>
+                                <small>Successful</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5>${stats.failed_messages || 0}</h5>
+                                <small>Failed</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h5>${stats.avg_response_time || 'N/A'}</h5>
+                                <small>Avg Response</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5>1,198</h5>
-                        <small>Successful</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5>36</h5>
-                        <small>Failed</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5>2.3s</h5>
-                        <small>Avg Response</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Message ID</th>
+                                <th>User</th>
+                                <th>Content</th>
+                                <th>Response Time</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            if (messages.length > 0) {
+                messages.forEach(msg => {
+                    const statusBadge = msg.success ?
+                        '<span class="badge bg-success">Success</span>' :
+                        '<span class="badge bg-danger">Failed</span>';
+
+                    messagesHtml += `
+                        <tr>
+                            <td>${msg.message_id}</td>
+                            <td>${msg.user_id}</td>
+                            <td>${msg.content}</td>
+                            <td>${msg.processing_time}</td>
+                            <td>${statusBadge}</td>
+                            <td>${msg.created_at}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                messagesHtml += `
                     <tr>
-                        <th>Message ID</th>
-                        <th>User</th>
-                        <th>Content</th>
-                        <th>Response Time</th>
-                        <th>Status</th>
-                        <th>Created</th>
+                        <td colspan="6" class="text-center text-muted">No messages found</td>
                     </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>msg_123...</td>
-                        <td>admin</td>
-                        <td>Solve 2x + 3 = 7</td>
-                        <td>1.2s</td>
-                        <td><span class="badge bg-success">Success</span></td>
-                        <td>2024-01-20 10:35</td>
-                    </tr>
-                    <tr>
-                        <td>msg_456...</td>
-                        <td>user123</td>
-                        <td>Write a poem about AI</td>
-                        <td>3.1s</td>
-                        <td><span class="badge bg-success">Success</span></td>
-                        <td>2024-01-20 10:30</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    setTimeout(() => {
-        document.getElementById('messagesTable').innerHTML = messagesHtml;
-    }, 800);
+                `;
+            }
+
+            messagesHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            document.getElementById('messagesTable').innerHTML = messagesHtml;
+        })
+        .catch(error => {
+            console.error('Error loading messages:', error);
+            document.getElementById('messagesTable').innerHTML = `
+                <div class="alert alert-danger">Error loading messages: ${error.message}</div>
+            `;
+        });
 }
 
 function loadLogsData() {

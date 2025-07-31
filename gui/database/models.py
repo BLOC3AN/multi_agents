@@ -232,8 +232,18 @@ class DatabaseConfig:
         else:
             logger.info("✅ Using online MongoDB")
 
-        # MongoDB client
-        self.mongo_client = MongoClient(self.mongodb_uri)
+        # MongoDB client with error handling
+        try:
+            self.mongo_client = MongoClient(self.mongodb_uri)
+            # Test connection
+            self.mongo_client.admin.command('ping')
+            logger.info("✅ MongoDB connection successful")
+        except Exception as e:
+            logger.error(f"❌ MongoDB connection failed: {e}")
+            if "must be escaped" in str(e):
+                logger.error("💡 Fix: Encode username/password in MongoDB URI using urllib.parse.quote_plus")
+                logger.error("💡 Example: mongodb+srv://encoded_user:encoded_pass@cluster.mongodb.net/db")
+            raise
         self.db: Database = self.mongo_client[self.database_name]
 
         # Collections
