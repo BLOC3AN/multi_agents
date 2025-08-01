@@ -12,11 +12,19 @@ interface UseSocketReturn extends SocketState {
   reconnect: () => void;
 }
 
-export const useSocket = (): UseSocketReturn => {
+interface UseSocketProps {
+  messagesCache?: React.MutableRefObject<Map<string, any[]>>;
+}
+
+export const useSocket = (props?: UseSocketProps): UseSocketReturn => {
   const { user, isAuthenticated } = useAuth();
-  const { addMessage, setCurrentSession, addSession } = useChannel();
-  
+  const { addMessage, setCurrentSession, addSession, setMessages, messages, currentSession } = useChannel();
+
   const socketRef = useRef<Socket | null>(null);
+  // Use external cache if provided, otherwise create internal one
+  const internalCache = useRef<Map<string, any[]>>(new Map());
+  const messagesCache = props?.messagesCache || internalCache;
+
   const [socketState, setSocketState] = useState<SocketState>({
     connected: false,
     authenticated: false,
@@ -96,13 +104,14 @@ export const useSocket = (): UseSocketReturn => {
         session_id: data.session_id,
         user_id: user?.user_id || '',
         session_name: data.session_name || data.title || `Chat ${data.session_id.substring(0, 8)}`,
-        created_at: new Date().toISOString(),
+        created_at: data.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
         message_count: 0,
         last_message_preview: '',
         is_active: true,
       };
-      
+
+      console.log('📝 Adding session with name:', session.session_name);
       addSession(session);
       setCurrentSession(session);
     });
@@ -119,33 +128,80 @@ export const useSocket = (): UseSocketReturn => {
         last_message_preview: data.last_message_preview || '',
         is_active: true,
       };
-      
+
+      console.log('🔗 Joined session with name:', session.session_name);
       setCurrentSession(session);
     });
 
     // Message events
     socket.on('message_response', (data) => {
       console.log('📨 Message response received', data);
-      
-      const message: ChatMessage = {
-        message_id: data.message_id || `msg_${Date.now()}`,
-        session_id: data.session_id,
-        user_id: user?.user_id || '',
-        user_input: data.user_input || '',
-        agent_response: data.response,
-        detected_intents: data.detected_intents,
-        primary_intent: data.primary_intent,
-        processing_mode: data.processing_mode,
-        agent_results: data.agent_responses,
-        execution_summary: data.execution_summary,
-        created_at: data.timestamp || new Date().toISOString(),
-        processing_time: data.processing_time,
-        errors: data.errors,
-        success: data.status === 'success',
-        metadata: data.metadata,
-      };
-      
-      addMessage(message);
+
+      // Find the latest user message to update with AI response
+      const currentMessages = messages || [];
+      console.log('🔍 Looking for message to update in', currentMessages.length, 'messages');
+      const latestUserMessage = [...currentMessages].reverse().find(msg =>
+        msg.user_input && (!msg.agent_response || msg.agent_response.trim() === '') && msg.session_id === data.session_id
+      );
+      console.log('🎯 Found message to update:', latestUserMessage ? latestUserMessage.message_id : 'none');
+
+      if (latestUserMessage) {
+        // Update existing message with AI response
+        const updatedMessage: ChatMessage = {
+          ...latestUserMessage,
+          agent_response: data.response,
+          detected_intents: data.detected_intents,
+          primary_intent: data.primary_intent,
+          processing_mode: data.processing_mode,
+          agent_results: data.agent_responses,
+          execution_summary: data.execution_summary,
+          processing_time: data.processing_time,
+          errors: data.errors,
+          success: data.status === 'success',
+          metadata: data.metadata,
+        };
+
+        console.log('🔄 Updating existing message with AI response:', updatedMessage);
+
+        // Update messages in state
+        const updatedMessages = currentMessages.map(msg =>
+          msg.message_id === latestUserMessage.message_id ? updatedMessage : msg
+        );
+        setMessages(updatedMessages);
+
+        // Update cache using session_id from the message (not currentSession)
+        messagesCache.current.set(data.session_id, updatedMessages);
+        console.log('💾 Cache updated for session:', data.session_id, 'with', updatedMessages.length, 'messages');
+      } else {
+        // Fallback: create new complete message
+        console.log('⚠️ No existing message found to update, creating new message');
+        const message: ChatMessage = {
+          message_id: data.message_id || `msg_${Date.now()}`,
+          session_id: data.session_id,
+          user_id: user?.user_id || '',
+          user_input: data.user_input || '',
+          agent_response: data.response,
+          detected_intents: data.detected_intents,
+          primary_intent: data.primary_intent,
+          processing_mode: data.processing_mode,
+          agent_results: data.agent_responses,
+          execution_summary: data.execution_summary,
+          created_at: data.timestamp || new Date().toISOString(),
+          processing_time: data.processing_time,
+          errors: data.errors,
+          success: data.status === 'success',
+          metadata: data.metadata,
+        };
+
+        console.log('➕ Adding new complete message:', message);
+        addMessage(message);
+
+        // Update cache for fallback case too
+        const currentCachedMessages = messagesCache.current.get(data.session_id) || [];
+        const updatedCachedMessages = [...currentCachedMessages, message];
+        messagesCache.current.set(data.session_id, updatedCachedMessages);
+        console.log('💾 Cache updated (fallback) for session:', data.session_id, 'with', updatedCachedMessages.length, 'messages');
+      }
     });
 
     socket.on('processing_error', (data) => {
@@ -200,11 +256,14 @@ export const useSocket = (): UseSocketReturn => {
     }
 
     const sessionData: any = {};
-    if (sessionName) {
-      sessionData.session_name = sessionName;
+    if (sessionName && sessionName.trim()) {
+      sessionData.session_name = sessionName.trim();
+      console.log('📝 Creating session with custom name:', sessionName.trim());
+    } else {
+      console.log('📝 Creating session with default name');
     }
 
-    console.log('📝 Creating session:', sessionData);
+    console.log('📝 Session data being sent:', sessionData);
     socketRef.current.emit('create_session', sessionData);
   }, [socketState.authenticated]);
 

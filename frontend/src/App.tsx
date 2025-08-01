@@ -9,6 +9,10 @@ import ProtectedRoute from './components/ProtectedRoute';
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
+const SyntaxTest = lazy(() => import('./components/SyntaxTest'));
+const LaTeXTest = lazy(() => import('./components/LaTeXTest'));
+
+
 
 // Loading component
 const LoadingSpinner: React.FC = () => (
@@ -23,7 +27,7 @@ function App() {
       <AuthProvider>
         <ChannelProvider>
           <Router>
-            <div className="min-h-screen bg-background text-foreground">
+            <div className="h-screen max-h-screen overflow-hidden bg-background text-foreground">
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                   {/* Public routes */}
@@ -53,6 +57,20 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
+
+                  {/* Test routes */}
+                  <Route
+                    path="/syntax-test"
+                    element={<SyntaxTest />}
+                  />
+                  <Route
+                    path="/latex-test"
+                    element={<LaTeXTest />}
+                  />
+
+
+
+
 
                   {/* Default redirect */}
                   <Route path="/" element={<Navigate to="/chat" replace />} />

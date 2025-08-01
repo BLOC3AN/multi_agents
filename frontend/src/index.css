@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-@import 'katex/dist/katex.min.css';
 
 /* UniversalSans font - fallback to system fonts if not available */
 @font-face {
@@ -50,6 +49,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Force text formatting styles after Tailwind */
+@layer utilities {
+  .force-bold {
+    font-weight: 600 !important;
+  }
+
+  .force-italic {
+    font-style: italic !important;
+  }
+}
 
 @layer base {
   :root {
@@ -156,7 +166,7 @@
 
   .text-universal-12 {
     font-family: 'UniversalSans', 'Helvetica Neue', 'Helvetica', 'Arial', system-ui, sans-serif;
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1.3;
   }
 
@@ -165,7 +175,7 @@
     font-family: 'UniversalSans', 'Helvetica Neue', 'Helvetica', 'Arial', system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
-    font-weight: 400;
+    font-weight: 300;
     letter-spacing: -0.01em;
   }
 
@@ -173,7 +183,7 @@
     font-family: 'UniversalSans', 'Helvetica Neue', 'Helvetica', 'Arial', system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.4;
-    font-weight: 500;
+    font-weight: 400;
     letter-spacing: -0.01em;
   }
 
@@ -203,9 +213,203 @@
     font-weight: 700;
   }
 
-  /* Markdown content styling */
+  /* GitHub-style Markdown content styling */
   .message-renderer {
     font-family: 'UniversalSans', 'Helvetica Neue', 'Helvetica', 'Arial', system-ui, sans-serif;
+    line-height: 1.6;
+    max-width: 100%;
+    overflow-x: hidden;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .github-markdown {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    word-wrap: break-word;
+  }
+
+  /* GitHub-style headers */
+  .github-h1, .github-h2 {
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: 16px;
+    margin-top: 24px;
+  }
+
+  .github-h1 {
+    font-size: 2em;
+    border-bottom: 1px solid #d0d7de;
+    padding-bottom: 0.3em;
+  }
+
+  .dark .github-h1 {
+    border-bottom-color: #30363d;
+  }
+
+  .github-h2 {
+    font-size: 1.5em;
+    border-bottom: 1px solid #d0d7de;
+    padding-bottom: 0.3em;
+  }
+
+  .dark .github-h2 {
+    border-bottom-color: #30363d;
+  }
+
+  .github-h3 {
+    font-size: 1.25em;
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: 16px;
+    margin-top: 24px;
+  }
+
+  .github-h4, .github-h5, .github-h6 {
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: 16px;
+    margin-top: 24px;
+  }
+
+  .github-h4 {
+    font-size: 1em;
+  }
+
+  .github-h5 {
+    font-size: 0.875em;
+  }
+
+  .github-h6 {
+    font-size: 0.85em;
+    color: #656d76;
+  }
+
+  .dark .github-h6 {
+    color: #8b949e;
+  }
+
+  /* Simplified inline code styling - orange theme */
+  .message-renderer code:not(pre code) {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace !important;
+    font-size: 0.875rem !important;
+    padding: 0.125rem 0.25rem !important;
+    border-radius: 0.125rem !important;
+    background-color: rgba(251, 146, 60, 0.1) !important;
+    color: rgb(249, 115, 22) !important;
+    font-weight: 500 !important;
+    display: inline !important;
+    margin: 0 !important;
+  }
+
+  .dark .message-renderer code:not(pre code) {
+    background-color: rgba(251, 191, 36, 0.1) !important;
+    color: rgb(254, 215, 170) !important;
+  }
+
+  /* GitHub-style code blocks - no borders */
+  .github-code-block {
+    background-color: #f6f8fa;
+    border-radius: 6px;
+    font-size: 85%;
+    line-height: 1.45;
+    overflow: auto;
+    padding: 0;
+  }
+
+  .dark .github-code-block {
+    background-color: #161b22;
+  }
+
+  .github-code-header {
+    background-color: #f6f8fa;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    padding: 8px 16px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .dark .github-code-header {
+    background-color: #161b22;
+  }
+
+
+
+  /* Remove syntax highlighting colors - plain text only */
+  .github-code-block .token,
+  .github-code-block .token.comment,
+  .github-code-block .token.prolog,
+  .github-code-block .token.doctype,
+  .github-code-block .token.cdata,
+  .github-code-block .token.punctuation,
+  .github-code-block .token.property,
+  .github-code-block .token.tag,
+  .github-code-block .token.constant,
+  .github-code-block .token.symbol,
+  .github-code-block .token.deleted,
+  .github-code-block .token.boolean,
+  .github-code-block .token.number,
+  .github-code-block .token.selector,
+  .github-code-block .token.attr-name,
+  .github-code-block .token.string,
+  .github-code-block .token.char,
+  .github-code-block .token.builtin,
+  .github-code-block .token.inserted,
+  .github-code-block .token.operator,
+  .github-code-block .token.entity,
+  .github-code-block .token.url,
+  .github-code-block .token.variable,
+  .github-code-block .token.atrule,
+  .github-code-block .token.attr-value,
+  .github-code-block .token.function,
+  .github-code-block .token.class-name,
+  .github-code-block .token.keyword,
+  .github-code-block .token.regex,
+  .github-code-block .token.important,
+  .github-code-block .token.triple-quoted-string {
+    color: #374151 !important;
+    background: none !important;
+    font-style: normal !important;
+    font-weight: normal !important;
+  }
+
+  .dark .github-code-block .token,
+  .dark .github-code-block .token.comment,
+  .dark .github-code-block .token.prolog,
+  .dark .github-code-block .token.doctype,
+  .dark .github-code-block .token.cdata,
+  .dark .github-code-block .token.punctuation,
+  .dark .github-code-block .token.property,
+  .dark .github-code-block .token.tag,
+  .dark .github-code-block .token.constant,
+  .dark .github-code-block .token.symbol,
+  .dark .github-code-block .token.deleted,
+  .dark .github-code-block .token.boolean,
+  .dark .github-code-block .token.number,
+  .dark .github-code-block .token.selector,
+  .dark .github-code-block .token.attr-name,
+  .dark .github-code-block .token.string,
+  .dark .github-code-block .token.char,
+  .dark .github-code-block .token.builtin,
+  .dark .github-code-block .token.inserted,
+  .dark .github-code-block .token.operator,
+  .dark .github-code-block .token.entity,
+  .dark .github-code-block .token.url,
+  .dark .github-code-block .token.variable,
+  .dark .github-code-block .token.atrule,
+  .dark .github-code-block .token.attr-value,
+  .dark .github-code-block .token.function,
+  .dark .github-code-block .token.class-name,
+  .dark .github-code-block .token.keyword,
+  .dark .github-code-block .token.regex,
+  .dark .github-code-block .token.important,
+  .dark .github-code-block .token.triple-quoted-string {
+    color: #e5e7eb !important;
+    background: none !important;
+    font-style: normal !important;
+    font-weight: normal !important;
   }
 
   .message-renderer .inline-code {
@@ -216,13 +420,529 @@
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
   }
 
-  /* KaTeX math styling */
-  .katex {
-    font-size: 1em !important;
+  /* GitHub-style lists */
+  .github-list {
+    margin-bottom: 16px;
+    margin-top: 0;
+    padding-left: 2em;
   }
 
-  .katex-display {
-    margin: 1rem 0 !important;
+  .github-list li {
+    margin-bottom: 0.25em;
+    margin-top: 0.25em;
+  }
+
+  .github-list li > p {
+    margin-bottom: 16px;
+    margin-top: 16px;
+  }
+
+  .github-list li + li {
+    margin-top: 0.25em;
+  }
+
+  /* GitHub-style blockquotes */
+  .github-blockquote {
+    border-left: 0.25em solid #d0d7de;
+    color: #656d76;
+    margin: 0 0 16px 0;
+    padding: 0 1em;
+  }
+
+  .dark .github-blockquote {
+    border-left-color: #30363d;
+    color: #8b949e;
+  }
+
+  .github-blockquote > :first-child {
+    margin-top: 0;
+  }
+
+  .github-blockquote > :last-child {
+    margin-bottom: 0;
+  }
+
+  /* GitHub-style links */
+  .github-link {
+    color: #0969da;
+    text-decoration: none;
+  }
+
+  .dark .github-link {
+    color: #58a6ff;
+  }
+
+  .github-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Prevent unwanted paragraph nesting */
+  .message-renderer p p {
+    display: contents;
+  }
+
+  .message-renderer p div {
+    display: block;
+    margin: 0.5rem 0;
+  }
+
+  /* Ensure proper spacing for nested elements */
+  .message-renderer .not-prose {
+    margin: 1rem 0;
+  }
+
+  .message-renderer .not-prose:first-child {
+    margin-top: 0;
+  }
+
+  .message-renderer .not-prose:last-child {
+    margin-bottom: 0;
+  }
+
+  /* GitHub-style tables */
+  .github-table-wrapper {
+    overflow: auto;
+  }
+
+  .github-table-wrapper table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    display: table;
+    margin-bottom: 16px;
+    margin-top: 0;
+    max-width: 100%;
+    width: max-content;
+  }
+
+  .github-th {
+    background-color: #f6f8fa;
+    border: 1px solid #d0d7de;
+    font-weight: 600;
+    padding: 6px 13px;
+    text-align: left;
+  }
+
+  .dark .github-th {
+    background-color: #161b22;
+    border-color: #30363d;
+  }
+
+  .github-td {
+    border: 1px solid #d0d7de;
+    padding: 6px 13px;
+  }
+
+  .dark .github-td {
+    border-color: #30363d;
+  }
+
+  .github-tr:nth-child(2n) {
+    background-color: #f6f8fa;
+  }
+
+  .dark .github-tr:nth-child(2n) {
+    background-color: #161b22;
+  }
+
+  /* GitHub-style horizontal rule */
+  .github-hr {
+    background-color: #d0d7de;
+    border: 0;
+    height: 0.25em;
+    margin: 24px 0;
+    padding: 0;
+  }
+
+  .dark .github-hr {
+    background-color: #30363d;
+  }
+
+  /* GitHub-style text formatting */
+  .github-strong,
+  .github-bold {
+    font-weight: 600 !important;
+    color: #1f2328 !important;
+  }
+
+  .dark .github-strong,
+  .dark .github-bold {
+    color: #f0f6fc !important;
+  }
+
+  .github-em,
+  .github-italic {
+    font-style: italic !important;
+    color: #656d76 !important;
+  }
+
+  .dark .github-em,
+  .dark .github-italic {
+    color: #8b949e !important;
+  }
+
+  /* Ensure text formatting works in all contexts - high specificity */
+  .message-renderer strong,
+  .message-renderer b,
+  .github-markdown strong,
+  .github-markdown b,
+  .message-renderer .github-strong,
+  .message-renderer .github-bold {
+    font-weight: 600 !important;
+    color: #1f2328 !important;
+  }
+
+  .dark .message-renderer strong,
+  .dark .message-renderer b,
+  .dark .github-markdown strong,
+  .dark .github-markdown b,
+  .dark .message-renderer .github-strong,
+  .dark .message-renderer .github-bold {
+    color: #f0f6fc !important;
+  }
+
+  .message-renderer em,
+  .message-renderer i,
+  .github-markdown em,
+  .github-markdown i,
+  .message-renderer .github-em,
+  .message-renderer .github-italic {
+    font-style: italic !important;
+    color: #656d76 !important;
+  }
+
+  .dark .message-renderer em,
+  .dark .message-renderer i,
+  .dark .github-markdown em,
+  .dark .github-markdown i,
+  .dark .message-renderer .github-em,
+  .dark .message-renderer .github-italic {
+    color: #8b949e !important;
+  }
+
+  /* Override any conflicting styles */
+  .message-renderer p strong,
+  .message-renderer li strong,
+  .message-renderer div strong,
+  .message-renderer p b,
+  .message-renderer li b,
+  .message-renderer div b {
+    font-weight: 600 !important;
+    color: #1f2328 !important;
+  }
+
+  .dark .message-renderer p strong,
+  .dark .message-renderer li strong,
+  .dark .message-renderer div strong,
+  .dark .message-renderer p b,
+  .dark .message-renderer li b,
+  .dark .message-renderer div b {
+    color: #f0f6fc !important;
+  }
+
+  .message-renderer p em,
+  .message-renderer li em,
+  .message-renderer div em,
+  .message-renderer p i,
+  .message-renderer li i,
+  .message-renderer div i {
+    font-style: italic !important;
+    color: #656d76 !important;
+  }
+
+  .dark .message-renderer p em,
+  .dark .message-renderer li em,
+  .dark .message-renderer div em,
+  .dark .message-renderer p i,
+  .dark .message-renderer li i,
+  .dark .message-renderer div i {
+    color: #8b949e !important;
+  }
+
+  /* MathJax math styling - Fix overflow and height issues */
+  .MathJax {
+    font-size: 0.95em !important;
+    max-width: 100% !important;
+    max-height: 300px !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    line-height: 1.2 !important;
+  }
+
+  .MathJax_Display {
+    margin: 0.75rem 0 !important;
+    max-width: 100% !important;
+    max-height: 400px !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    /* Add scrollbar styling for better UX */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+    /* Prevent excessive spacing */
+    padding: 0.5rem 0 !important;
+  }
+
+  .MathJax_Display::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .MathJax_Display::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .MathJax_Display::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+  }
+
+  .MathJax_Display::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.7);
+  }
+
+  /* MathJax SVG elements */
+  .MathJax svg {
+    max-width: 100% !important;
+    max-height: 300px !important;
+    overflow: visible !important;
+  }
+
+  /* Fix inline math overflow and height */
+  .MathJax_SVG {
+    max-width: 100% !important;
+    max-height: 50px !important;
+    display: inline-block !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    vertical-align: middle !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Math wrapper styles - Control height and spacing */
+  .math-display-wrapper {
+    max-width: 100%;
+    max-height: 400px;
+    overflow-x: auto;
+    overflow-y: auto;
+    margin: 0.75rem 0;
+    padding: 0.5rem;
+    /* Add subtle border to indicate scrollable area */
+    border: 1px solid transparent;
+    border-radius: 4px;
+    /* Ensure content is contained */
+    contain: layout style;
+  }
+
+  .math-display-wrapper:hover {
+    border-color: rgba(156, 163, 175, 0.2);
+    background-color: rgba(249, 250, 251, 0.5);
+  }
+
+  .math-inline-wrapper {
+    max-width: 100%;
+    max-height: 50px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    vertical-align: middle;
+    display: inline-block;
+    /* Ensure content is contained */
+    contain: layout style;
+  }
+
+  /* Math container components */
+  .math-display-container {
+    max-width: 100%;
+    max-height: 400px;
+    overflow-x: auto;
+    overflow-y: auto;
+    margin: 0.75rem 0;
+    /* Ensure content is contained */
+    contain: layout style;
+  }
+
+  .math-inline-container {
+    max-width: 100%;
+    max-height: 50px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    vertical-align: middle;
+    display: inline-block;
+    /* Ensure content is contained */
+    contain: layout style;
+  }
+
+  /* Ensure math content doesn't break container */
+  .math-display-wrapper .MathJax_Display,
+  .math-inline-wrapper .MathJax {
+    margin: 0 !important;
+  }
+
+  /* Control spacing in message renderer */
+  .message-renderer .MathJax_Display {
+    margin: 0.5rem 0 !important;
+  }
+
+  .message-renderer .MathJax {
+    margin: 0 !important;
+  }
+
+  /* Prevent excessive vertical spacing */
+  .message-renderer > *:first-child {
+    margin-top: 0 !important;
+  }
+
+  .message-renderer > *:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Global overflow control - Fixed viewport */
+  html, body {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+
+  /* Root container should fill viewport */
+  #root {
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+  }
+
+  /* Prevent any element from causing horizontal scroll */
+  * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Ensure main content areas are properly contained */
+  .main-content,
+  .chat-container,
+  .message-container {
+    max-height: 100vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Special handling for absolutely positioned elements */
+  .MathJax .MathJax_SVG > .newline {
+    max-width: 100% !important;
+  }
+
+  /* Dropdown animations */
+  @keyframes slide-in-from-bottom {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes slide-in-from-top {
+    from {
+      opacity: 0;
+      transform: translateY(-10px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-in {
+    animation-fill-mode: both;
+  }
+
+  .slide-in-from-bottom-2 {
+    animation: slide-in-from-bottom 0.2s ease-out;
+  }
+
+  .slide-in-from-top-2 {
+    animation: slide-in-from-top 0.2s ease-out;
+  }
+
+  .duration-200 {
+    animation-duration: 0.2s;
+  }
+
+  /* Force containment for large math expressions */
+  .MathJax_Display .MathJax {
+    contain: layout style !important;
+    max-height: 350px !important;
+    overflow-y: auto !important;
+  }
+
+  /* Prevent math from pushing content down excessively */
+  .message-renderer .MathJax_Display {
+    contain: layout !important;
+    max-height: 350px !important;
+    overflow-y: auto !important;
+  }
+
+  /* Add visual indicator for scrollable math */
+  .MathJax_Display::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .MathJax_Display::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+  }
+
+  .MathJax_Display::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+  }
+
+  .MathJax_Display::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  /* Fix list spacing issues */
+  .message-renderer li > p {
+    margin: 0;
+    display: inline;
+  }
+
+  .message-renderer li > p:not(:last-child) {
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  /* Prevent all content from causing horizontal overflow */
+  .message-renderer * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Special handling for wide elements */
+  .message-renderer pre,
+  .message-renderer code,
+  .message-renderer table {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Ensure tables don't break layout */
+  .message-renderer table {
+    table-layout: auto;
+    width: 100%;
+  }
+
+  /* Fix code blocks overflow */
+  .message-renderer .code-block {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .message-renderer .code-content {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre;
   }
 
   /* Responsive utilities */
@@ -240,5 +960,76 @@
     :root {
       --sidebar-width: 100vw;
     }
+  }
+
+  /* History block specific styles */
+  .history-block {
+    height: 528px;
+  }
+
+  .history-sessions-container {
+    max-height: calc(528px - 120px); /* Subtract header and button space */
+  }
+
+  /* Session item hover effects */
+  .session-item {
+    transition: all 0.15s ease-in-out;
+  }
+
+  .session-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark .session-item:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Modal backdrop blur effect */
+  .modal-backdrop {
+    backdrop-filter: blur(4px);
+  }
+
+  /* Custom scrollbar styles */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+  }
+
+  /* Session dropdown specific styles */
+  .session-dropdown {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(8px);
+  }
+
+  .dark .session-dropdown {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Ensure dropdown is always visible */
+  .session-item-container {
+    position: relative;
+    overflow: visible;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.7);
+  }
+
+  /* Dark mode scrollbar */
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(75, 85, 99, 0.5);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(75, 85, 99, 0.7);
   }
 }

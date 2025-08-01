@@ -165,6 +165,43 @@ def ensure_session_exists(session_id: str, user_id: str):
     except Exception as e:
         system_logger.error(f"❌ Failed to ensure session exists: {e}")
 
+
+def ensure_session_exists_with_name(session_id: str, user_id: str, session_name: str):
+    """Ensure session exists in database with custom name."""
+    if not DATABASE_AVAILABLE or not db_config:
+        return
+
+    try:
+        # Check if session exists
+        existing_session = db_config.sessions.find_one({"session_id": session_id})
+
+        if not existing_session:
+            # Create new session with custom name
+            session = ChatSession(
+                session_id=session_id,
+                user_id=user_id,
+                title=session_name,  # Use custom session name
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                total_messages=0,
+                is_active=True
+            )
+
+            session_doc = session.to_dict()
+            db_config.sessions.insert_one(session_doc)
+            system_logger.info(f"✅ New session created: {session_id} with name: '{session_name}'")
+        else:
+            # Update existing session name if different
+            if existing_session.get('title') != session_name:
+                db_config.sessions.update_one(
+                    {"session_id": session_id},
+                    {"$set": {"title": session_name, "updated_at": datetime.utcnow()}}
+                )
+                system_logger.info(f"✅ Session name updated: {session_id} -> '{session_name}'")
+
+    except Exception as e:
+        system_logger.error(f"❌ Failed to ensure session exists with name: {e}")
+
 @sio.event
 def connect(sid, environ):
     """Handle client connection."""
@@ -236,7 +273,9 @@ def process_message(sid, data):
         message = data.get('message', '')
         client_info = connected_clients.get(sid, {})
         user_id = client_info.get('user_id', 'anonymous')
-        session_id = client_info.get('session_id')
+
+        # Get session_id from message data first, fallback to client_info
+        session_id = data.get('session_id') or client_info.get('session_id')
 
         if not user_id or not client_info.get('authenticated'):
             print(f"❌ User not authenticated: {user_id}")
@@ -251,6 +290,11 @@ def process_message(sid, data):
                 "error": "No active session. Please create a session first."
             }, room=sid)
             return
+
+        # Update client_info with current session_id if it's different
+        if client_info.get('session_id') != session_id:
+            connected_clients[sid]['session_id'] = session_id
+            print(f"🔄 Updated session for client {sid}: {session_id}")
 
         print(f"🔍 Processing message for user: {user_id}, session: {session_id}")
 
@@ -294,11 +338,13 @@ def process_message(sid, data):
             response = {
                 "status": "success",
                 "response": response_text,
+                "user_input": message,  # Include original user input
                 "timestamp": datetime.now().isoformat(),
                 "user_id": user_id,
                 "session_id": session_id,
                 "agent_responses": serializable_agent_results,
-                "metadata": result.get('metadata', {})
+                "metadata": result.get('metadata', {}),
+                "processing_mode": "multiagents"
             }
 
         else:
@@ -309,9 +355,11 @@ def process_message(sid, data):
             response = {
                 "status": "success",
                 "response": response_text,
+                "user_input": message,  # Include original user input
                 "timestamp": datetime.now().isoformat(),
                 "user_id": user_id,
                 "session_id": session_id,
+                "processing_mode": "fallback",
                 "note": "Multiagents system not available - using echo response"
             }
 
@@ -364,8 +412,17 @@ def create_session(sid, data):
 
         session_id = data.get("session_id") or str(uuid.uuid4())
 
-        # Ensure session exists in database
-        ensure_session_exists(session_id, user_id)
+        # Get session name from data, fallback to default
+        session_name = data.get("session_name")
+        if not session_name or not session_name.strip():
+            session_name = f"Session {session_id[:8]}"
+        else:
+            session_name = session_name.strip()
+
+        print(f"📝 Creating session with name: '{session_name}'")
+
+        # Ensure session exists in database with custom name
+        ensure_session_exists_with_name(session_id, user_id, session_name)
 
         # Update client info with new session
         connected_clients[sid]["session_id"] = session_id
@@ -373,15 +430,16 @@ def create_session(sid, data):
         # Create session response
         session_data = {
             "session_id": session_id,
-            "title": f"Session {session_id[:8]}",
+            "session_name": session_name,  # Use session_name instead of title
+            "title": session_name,  # Keep title for backward compatibility
             "created_at": datetime.now().isoformat()
         }
 
-        print(f"✅ Session created: {session_id}")
+        print(f"✅ Session created: {session_id} with name: '{session_name}'")
 
         # Send success response
         sio.emit('session_created', session_data, room=sid)
-        system_logger.info(f"✅ Session created: {session_id} for user {user_id}")
+        system_logger.info(f"✅ Session created: {session_id} with name '{session_name}' for user {user_id}")
 
     except Exception as e:
         print(f"❌ SESSION CREATION ERROR: {e}")
@@ -415,14 +473,25 @@ def join_session(sid, data):
         # Update client info with session
         connected_clients[sid]["session_id"] = session_id
 
+        # Try to get session name from database
+        session_name = f"Session {session_id[:8]}"  # Default fallback
+        if DATABASE_AVAILABLE and db_config:
+            try:
+                existing_session = db_config.sessions.find_one({"session_id": session_id})
+                if existing_session and existing_session.get('title'):
+                    session_name = existing_session['title']
+            except Exception as e:
+                print(f"⚠️ Could not fetch session name from DB: {e}")
+
         # Create join response
         session_data = {
             "session_id": session_id,
-            "title": f"Session {session_id[:8]}",
+            "session_name": session_name,  # Use actual session name
+            "title": session_name,  # Keep title for backward compatibility
             "joined_at": datetime.now().isoformat()
         }
 
-        print(f"✅ Joined session: {session_id}")
+        print(f"✅ Joined session: {session_id} with name: '{session_name}'")
 
         # Send success response
         sio.emit('session_joined', session_data, room=sid)

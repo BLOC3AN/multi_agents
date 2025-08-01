@@ -56,8 +56,30 @@ setup: ## Setup environment (create directories, check .env)
 	fi
 	@echo "✅ Environment setup completed"
 
-# Development mode (recommended)
-dev: dev-react ## Quick development start with React
+# Development mode (recommended) - Start all services
+dev: setup ## Quick development start with all services
+	@echo "🚀 Starting development environment..."
+	@echo ""
+	@echo "[1/4] 🔄 Starting Redis..."
+	@make up-redis
+	@echo ""
+	@echo "[2/4] 🔌 Starting SocketIO server..."
+	@make up-socketio
+	@sleep 2
+	@echo ""
+	@echo "[3/4] 🔐 Starting Auth API..."
+	@make up-auth
+	@sleep 2
+	@echo ""
+	@echo "[4/4] ⚛️  Starting React frontend..."
+	@make up-react
+	@echo ""
+	@echo "🎉 Development environment ready!"
+	@echo "Services:"
+	@echo "  - React Frontend: http://localhost:3000"
+	@echo "  - Auth API: http://localhost:8000"
+	@echo "  - SocketIO: http://localhost:8001"
+	@echo ""
 
 # Start all services with React (recommended)
 up: up-redis up-socketio up-auth up-react ## Start all services with React
@@ -113,9 +135,9 @@ up-react: ## Start React development server
 	    echo "⚠️  React already running (PID: $$(cat $(REACT_PID_FILE)))"; \
 	else \
 	    echo "$$(date '+%Y-%m-%d %H:%M:%S') - Starting React dev server..." >> logs/react.log; \
-	    cd frontend && npm run dev >> ../logs/react.log 2>&1 & \
+	    (cd frontend && npm run dev >> ../logs/react.log 2>&1) & \
 	    REACT_PID=$$!; \
-	    echo $$REACT_PID > ../$(REACT_PID_FILE); \
+	    echo $$REACT_PID > $(REACT_PID_FILE); \
 	    echo "✅ React started on port 3000 (PID: $$REACT_PID)"; \
 	    echo "📋 Logs: tail -f logs/react.log"; \
 	    echo "🌐 Access: http://localhost:3000"; \
@@ -127,11 +149,12 @@ build-react: ## Build React frontend for production
 	@cd frontend && npm run build
 	@echo "✅ React build completed"
 
-# Development mode with React
-dev-react: install setup-react up-redis up-socketio up-react ## Quick development start with React
+# Development mode with React (legacy - use 'dev' instead)
+dev-react: install setup-react up-redis up-socketio up-auth up-react ## Quick development start with React
 	@echo "🎉 React development environment ready!"
 	@echo "Services:"
 	@echo "  - React Frontend: http://localhost:3000"
+	@echo "  - Auth API: http://localhost:8000"
 	@echo "  - SocketIO: http://localhost:8001"
 
 # Stop all services

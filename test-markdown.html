@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Markdown Test</title>
+</head>
+<body>
+    <h1>Test Cases for Markdown Rendering</h1>
+    
+    <h2>1. Inline Code (single backticks)</h2>
+    <p>This should be inline: `console.log('hello')` and this too: `variable`</p>
+    
+    <h2>2. Code Block (triple backticks)</h2>
+    <pre>
+```javascript
+function test() {
+    console.log('This should be a code block');
+    return true;
+}
+```
+    </pre>
+    
+    <h2>3. Bold Text</h2>
+    <p>This should be **bold text** and this too: **important**</p>
+    
+    <h2>4. Mixed Content</h2>
+    <p>Here we have `inline code` and **bold text** together.</p>
+    
+    <h2>Expected Results:</h2>
+    <ul>
+        <li>Single backticks should render as inline code with orange background</li>
+        <li>Triple backticks should render as code blocks with gray background and copy button</li>
+        <li>Double asterisks should render as bold text, NOT code blocks</li>
+    </ul>
+</body>
+</html>
