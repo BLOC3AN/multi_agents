@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import FilePreviewModal from './FilePreviewModal';
 
 interface FileItem {
   key: string;
@@ -19,6 +20,11 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [previewModal, setPreviewModal] = useState<{isOpen: boolean, fileKey: string, fileName: string}>({
+    isOpen: false,
+    fileKey: '',
+    fileName: ''
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load files on component mount
@@ -156,6 +162,22 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
     setDragOver(false);
     const files = e.dataTransfer.files;
     handleFileUpload(files);
+  };
+
+  const handleFileClick = (file: FileItem) => {
+    setPreviewModal({
+      isOpen: true,
+      fileKey: file.key,
+      fileName: file.name
+    });
+  };
+
+  const closePreviewModal = () => {
+    setPreviewModal({
+      isOpen: false,
+      fileKey: '',
+      fileName: ''
+    });
   };
 
   return (
@@ -368,20 +390,21 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
             {files.map((file) => (
               <div
                 key={file.key}
-                className="group px-3 py-2 rounded-lg hover:bg-gray-100/50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
+                className="group px-3 py-2 rounded-lg hover:bg-gray-100/50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-600 cursor-pointer"
+                onClick={() => handleFileClick(file)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.name}>
                       {file.name}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatFileSize(file.size)} • {formatDate(file.last_modified)}
-                    </div>
                   </div>
                   <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={() => handleDownload(file)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(file);
+                      }}
                       className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                       title="Download"
                     >
@@ -392,7 +415,10 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
                       </svg>
                     </button>
                     <button
-                      onClick={() => handleDelete(file)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(file);
+                      }}
                       className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
                       title="Delete"
                     >
@@ -410,6 +436,14 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
           </div>
         </>
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        isOpen={previewModal.isOpen}
+        onClose={closePreviewModal}
+        fileKey={previewModal.fileKey}
+        fileName={previewModal.fileName}
+      />
     </div>
   );
 };

@@ -801,6 +801,45 @@ async def get_file_info(file_key: str):
         raise HTTPException(status_code=500, detail=f"Failed to get file info: {str(e)}")
 
 
+@app.get("/api/s3/content/{file_key:path}")
+async def get_file_content(file_key: str):
+    """Get file content for preview (not download)."""
+    start_time = datetime.utcnow()
+
+    if not S3_AVAILABLE:
+        api_logger.error("❌ S3 manager not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="S3 service not available"
+        )
+
+    try:
+        s3_manager = get_s3_manager()
+        result = s3_manager.get_file_content(file_key)
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+        if result['success']:
+            api_logger.log_response(200, processing_time)
+            api_logger.info(f"✅ File content retrieved: {file_key}")
+            return JSONResponse(content=result)
+        else:
+            api_logger.log_response(404, processing_time)
+            api_logger.error(f"❌ File content not found: {file_key}")
+            raise HTTPException(status_code=404, detail=result['error'])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Error getting file content: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
 if __name__ == "__main__":
     system_logger.info("🚀 Starting Authentication API server on port 8000...")
     uvicorn.run(

@@ -291,6 +291,115 @@ class S3Manager:
         except Exception as e:
             return {'error': str(e)}
 
+    def get_file_content(self, file_key: str) -> Dict:
+        """
+        Lấy nội dung file để hiển thị (không download)
+
+        Args:
+            file_key: Key của file trong S3
+
+        Returns:
+            Dict chứa nội dung file và metadata
+        """
+        try:
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=file_key
+            )
+
+            file_content = response['Body'].read()
+            stored_content_type = response.get('ContentType', 'application/octet-stream')
+
+            # Override content type based on file extension for better detection
+            import mimetypes
+            file_name = file_key.split('/')[-1]
+            detected_content_type, _ = mimetypes.guess_type(file_name)
+            content_type = detected_content_type or stored_content_type
+
+            # Determine if file is text-based for preview
+            text_types = [
+                'text/', 'application/json', 'application/xml',
+                'application/javascript', 'application/csv'
+            ]
+
+            # Also check file extension for common text files
+            text_extensions = ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv', '.log']
+            file_ext = '.' + file_name.split('.')[-1].lower() if '.' in file_name else ''
+
+            is_text = any(content_type.startswith(t) for t in text_types) or file_ext in text_extensions
+
+            result = {
+                'success': True,
+                'file_key': file_key,
+                'file_name': file_name,
+                'content_type': content_type,
+                'size': len(file_content),
+                'is_text': is_text
+            }
+
+            if is_text:
+                # For text files, decode content
+                try:
+                    result['content'] = file_content.decode('utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        result['content'] = file_content.decode('latin-1')
+                    except:
+                        result['is_text'] = False
+                        result['content'] = None
+            else:
+                # Handle special file types
+                if content_type.startswith('image/'):
+                    import base64
+                    result['content'] = base64.b64encode(file_content).decode('utf-8')
+                elif content_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or file_ext == '.docx':
+                    # Handle Word documents
+                    try:
+                        from docx import Document
+                        import io
+
+                        # Create a Document object from the file content
+                        doc = Document(io.BytesIO(file_content))
+
+                        # Extract text from all paragraphs
+                        text_content = []
+                        for paragraph in doc.paragraphs:
+                            if paragraph.text.strip():  # Only add non-empty paragraphs
+                                text_content.append(paragraph.text)
+
+                        result['content'] = '\n\n'.join(text_content)
+                        result['is_text'] = True
+                        result['content_type'] = 'text/plain'  # Override for display
+
+                        logger.info(f"Successfully extracted text from Word document: {file_key}")
+                    except Exception as e:
+                        logger.error(f"Failed to extract text from Word document {file_key}: {str(e)}")
+                        result['content'] = None
+                else:
+                    result['content'] = None
+
+            logger.info(f"Successfully retrieved content for file: {file_key} (type: {content_type}, is_text: {is_text})")
+            return result
+
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                return {
+                    'success': False,
+                    'error': 'File not found'
+                }
+            else:
+                logger.error(f"Failed to get file content: {str(e)}")
+                return {
+                    'success': False,
+                    'error': str(e)
+                }
+        except Exception as e:
+            logger.error(f"Failed to get file content: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
 
 # Singleton instance
 s3_manager = None
