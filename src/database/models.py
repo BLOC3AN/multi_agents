@@ -110,6 +110,30 @@ class SystemLog:
         return data
 
 
+@dataclass
+class FileMetadata:
+    """File metadata model for user file management."""
+    file_id: str
+    user_id: str
+    file_key: str  # S3 key/path
+    file_name: str
+    file_size: int
+    content_type: str
+    upload_date: Optional[datetime] = None
+    s3_bucket: Optional[str] = None
+    is_active: bool = True
+    metadata: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for MongoDB storage."""
+        data = asdict(self)
+        # Convert datetime objects to ISO strings
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+        return data
+
+
 class DatabaseConfig:
     """Database configuration and connection management."""
     
@@ -126,6 +150,7 @@ class DatabaseConfig:
         self.sessions: Collection = self.database.chat_sessions
         self.messages: Collection = self.database.chat_messages
         self.logs: Collection = self.database.system_logs
+        self.file_metadata: Collection = self.database.file_metadata
         
         # Test connection
         try:
@@ -171,7 +196,16 @@ class DatabaseConfig:
             self.logs.create_index("component")
             self.logs.create_index("user_id", sparse=True)
             self.logs.create_index("session_id", sparse=True)
-            
+
+            # File metadata collection indexes
+            self.file_metadata.create_index("file_id", unique=True)
+            self.file_metadata.create_index("user_id")
+            self.file_metadata.create_index("file_key", unique=True)
+            self.file_metadata.create_index([("user_id", 1), ("upload_date", -1)])
+            self.file_metadata.create_index("upload_date")
+            self.file_metadata.create_index("is_active")
+            self.file_metadata.create_index("content_type")
+
             print("✅ Database indexes created successfully")
             
         except Exception as e:

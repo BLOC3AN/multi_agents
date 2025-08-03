@@ -7,13 +7,18 @@ interface FileItem {
   size: number;
   last_modified: string;
   folder: string;
+  // New fields from file management system
+  file_id?: string;
+  content_type?: string;
+  metadata?: any;
 }
 
 interface FilesBlockProps {
   className?: string;
+  userId: string;
 }
 
-const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
+const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId }) => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -27,18 +32,25 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load files on component mount
+  // Load files on component mount and when userId changes
   useEffect(() => {
-    loadFiles();
-  }, []);
+    if (userId) {
+      loadFiles();
+    }
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFiles = async () => {
+    if (!userId) {
+      setFiles([]);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/s3/files');
+      const response = await fetch(`/api/s3/files?user_id=${encodeURIComponent(userId)}`);
       const data = await response.json();
-      
+
       if (data.success) {
         setFiles(data.files || []);
       } else {
@@ -55,6 +67,18 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
   const handleFileUpload = async (fileList: FileList) => {
     if (!fileList || fileList.length === 0) return;
 
+    if (!userId) {
+      setError('User not logged in');
+      return;
+    }
+
+    // Check file limit
+    const maxFiles = 50;
+    if (files.length + fileList.length > maxFiles) {
+      setError(`Cannot upload more than ${maxFiles} files. You currently have ${files.length} files.`);
+      return;
+    }
+
     setUploading(true);
     setError(null);
 
@@ -63,6 +87,7 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
         const file = fileList[i];
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('user_id', userId);
 
         const response = await fetch('/api/s3/upload', {
           method: 'POST',
@@ -113,8 +138,13 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
       return;
     }
 
+    if (!userId) {
+      setError('User not logged in');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/s3/delete/${encodeURIComponent(file.key)}`, {
+      const response = await fetch(`/api/s3/delete/${encodeURIComponent(file.key)}?user_id=${encodeURIComponent(userId)}`, {
         method: 'DELETE',
       });
 
@@ -138,13 +168,7 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const formatDate = (dateString: string): string => {
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch {
-      return dateString;
-    }
-  };
+
 
   // Drag and drop handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -220,22 +244,35 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
         </div>
         <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
           <div
-            className="font-light text-gray-500 dark:text-gray-400"
+            className={`font-light ${
+              files.length >= 45
+                ? 'text-red-500 dark:text-red-400'
+                : files.length >= 40
+                ? 'text-yellow-500 dark:text-yellow-400'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
             style={{ fontSize: 'calc(100vw / 7 * 0.035)' }}
+            title={`${files.length} files uploaded, maximum 50 allowed`}
           >
-            ({files.length})
+            ({files.length}/50)
           </div>
           {!isCollapsed && (
             <>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  fileInputRef.current?.click();
+                  if (files.length < 50) {
+                    fileInputRef.current?.click();
+                  }
                 }}
-                disabled={uploading}
-                className="rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                disabled={uploading || files.length >= 50}
+                className={`rounded transition-colors ${
+                  files.length >= 50
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
                 style={{ padding: 'calc(100vw / 7 * 0.01)' }}
-                title="Upload files"
+                title={files.length >= 50 ? 'Maximum files reached (50/50)' : 'Upload files'}
               >
                 <svg
                   style={{
@@ -320,7 +357,11 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              if (files.length < 50) {
+                fileInputRef.current?.click();
+              }
+            }}
           >
         <input
           ref={fileInputRef}
@@ -381,7 +422,7 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
                 className="font-light"
                 style={{ fontSize: 'calc(100vw / 7 * 0.05)' }}
               >
-                Upload some files to get started
+                Upload some files to get started (max 50 files)
               </div>
             </div>
           </div>
@@ -395,7 +436,10 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.name}>
+                    <div
+                      className="text-sm font-medium text-gray-900 dark:text-white truncate"
+                      title={`${file.name} (${formatFileSize(file.size)})`}
+                    >
                       {file.name}
                     </div>
                   </div>

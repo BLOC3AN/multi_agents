@@ -473,7 +473,7 @@ const ChatPage: React.FC = () => {
 
         {/* Files Block - Above History Block */}
         <div style={{ padding: 'calc(100vw / 7 * 0.02) calc(100vw / 7 * 0.05)' }}>
-          <FilesBlock />
+          <FilesBlock userId={user?.user_id || ''} />
         </div>
 
         {/* Spacer to push History close to User Block */}
