@@ -1,7 +1,8 @@
 import os
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
-from typing import List, Dict, Optional, BinaryIO
+from typing import List, Dict, Optional, BinaryIO, Union
+import io
 import logging
 from datetime import datetime
 import mimetypes
@@ -27,17 +28,28 @@ class S3Manager:
             raise ValueError("Missing S3 configuration. Please check your .env file.")
 
         try:
-            # Sử dụng signature V4 cho Viettel S3
-            from botocore.config import Config
+            # Sử dụng signature V4 cho các operation thông thường
+            from botocore.client import Config
 
-            config = Config(signature_version='s3v4')
+            config_v4 = Config(signature_version='s3v4')
+            config_v3 = Config(signature_version='s3')
 
+            # Client chính dùng s3v4 cho list, get, delete operations
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
                 endpoint_url=self.endpoint_url,
-                config=config
+                config=config_v4
+            )
+
+            # Client riêng dùng s3 cho upload operations (tránh SHA256 hash issue)
+            self.s3_upload_client = boto3.client(
+                's3',
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.access_key,
+                aws_secret_access_key=self.secret_key,
+                config=config_v3
             )
 
             # Test connection
@@ -79,7 +91,7 @@ class S3Manager:
                 logger.error(f"Error accessing bucket: {str(e)}")
                 raise
 
-    def upload_file(self, file_obj: BinaryIO, file_name: str, folder: str = "documents") -> Dict:
+    def upload_file(self, file_obj: Union[BinaryIO, io.BytesIO], file_name: str, folder: str = "documents") -> Dict:
         """
         Upload file lên S3
 
@@ -100,11 +112,18 @@ class S3Manager:
             if not content_type:
                 content_type = 'application/octet-stream'
 
-            # Thử upload với put_object (giống như test Python)
-            self.s3_client.put_object(
+            # Thử upload với put_object sử dụng s3 signature (tránh SHA256 hash issue)
+            # Xử lý file content tùy theo loại file_obj
+            if hasattr(file_obj, 'getvalue'):
+                file_content = file_obj.getvalue()
+            else:
+                file_content = file_obj.read()
+
+            self.s3_upload_client.put_object(
                 Bucket=self.bucket_name,
                 Key=file_key,
-                Body=file_obj.getvalue()
+                Body=file_content,
+                ContentType=content_type
             )
 
             # Get file info
@@ -326,6 +345,11 @@ class S3Manager:
             text_extensions = ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv', '.log']
             file_ext = '.' + file_name.split('.')[-1].lower() if '.' in file_name else ''
 
+            # Special handling for PDF and Markdown files
+            is_pdf = file_ext == '.pdf' or content_type == 'application/pdf'
+            is_markdown = file_ext == '.md' or content_type == 'text/markdown'
+            is_docx = file_ext == '.docx' or content_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
             is_text = any(content_type.startswith(t) for t in text_types) or file_ext in text_extensions
 
             result = {
@@ -352,29 +376,115 @@ class S3Manager:
                 if content_type.startswith('image/'):
                     import base64
                     result['content'] = base64.b64encode(file_content).decode('utf-8')
-                elif content_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or file_ext == '.docx':
-                    # Handle Word documents
+                elif is_docx:
+                    # Handle Word documents - convert to HTML for better display
                     try:
                         from docx import Document
                         import io
+                        import base64
 
-                        # Create a Document object from the file content
+                        # Try to extract structured content from Word document
                         doc = Document(io.BytesIO(file_content))
 
-                        # Extract text from all paragraphs
-                        text_content = []
+                        # Extract content with basic formatting
+                        html_content = []
+                        html_content.append('<div class="word-document">')
+
                         for paragraph in doc.paragraphs:
-                            if paragraph.text.strip():  # Only add non-empty paragraphs
-                                text_content.append(paragraph.text)
+                            if paragraph.text.strip():
+                                # Check for heading styles
+                                style_name = paragraph.style.name.lower() if paragraph.style.name else ''
+                                if 'heading' in style_name:
+                                    level = '1'
+                                    if 'heading 2' in style_name:
+                                        level = '2'
+                                    elif 'heading 3' in style_name:
+                                        level = '3'
+                                    html_content.append(f'<h{level}>{self._extract_formatted_text(paragraph)}</h{level}>')
+                                else:
+                                    # Regular paragraph with formatting
+                                    formatted_text = self._extract_formatted_text(paragraph)
+                                    html_content.append(f'<p>{formatted_text}</p>')
 
-                        result['content'] = '\n\n'.join(text_content)
+                        # Extract tables with formatting
+                        for table in doc.tables:
+                            html_content.append('<table class="word-table">')
+                            for row in table.rows:
+                                html_content.append('<tr>')
+                                for cell in row.cells:
+                                    # Extract formatted text from each cell
+                                    cell_content = []
+                                    for paragraph in cell.paragraphs:
+                                        if paragraph.text.strip():
+                                            cell_content.append(self._extract_formatted_text(paragraph))
+                                    cell_text = '<br>'.join(cell_content) if cell_content else ''
+                                    html_content.append(f'<td>{cell_text}</td>')
+                                html_content.append('</tr>')
+                            html_content.append('</table>')
+
+                        html_content.append('</div>')
+
+                        # Join and clean up HTML
+                        html_result = '\n'.join(html_content)
+                        # Replace multiple line breaks with proper spacing
+                        html_result = html_result.replace('\n\n\n', '\n\n')
+
+                        result['content'] = html_result
+                        result['raw_content'] = base64.b64encode(file_content).decode('utf-8')  # Keep raw for download
                         result['is_text'] = True
-                        result['content_type'] = 'text/plain'  # Override for display
+                        result['content_type'] = 'text/html'  # Override for display
+                        result['is_docx'] = True  # Special flag for Word
 
-                        logger.info(f"Successfully extracted text from Word document: {file_key}")
+                        logger.info(f"Successfully converted Word document to HTML: {file_key}")
                     except Exception as e:
-                        logger.error(f"Failed to extract text from Word document {file_key}: {str(e)}")
+                        logger.error(f"Failed to convert Word document {file_key}: {str(e)}")
+                        # Fallback to base64 for download
+                        try:
+                            import base64
+                            result['content'] = None
+                            result['raw_content'] = base64.b64encode(file_content).decode('utf-8')
+                            result['is_text'] = False
+                            result['is_docx'] = True
+                        except:
+                            result['content'] = None
+                elif is_pdf:
+                    # Handle PDF documents - return base64 for frontend PDF viewer
+                    try:
+                        import base64
+                        result['content'] = base64.b64encode(file_content).decode('utf-8')
+                        result['is_text'] = False  # Mark as binary for special handling
+                        result['content_type'] = 'application/pdf'
+                        result['is_pdf'] = True  # Special flag for PDF
+                        logger.info(f"Successfully prepared PDF for viewing: {file_key}")
+                    except Exception as e:
+                        logger.error(f"Failed to prepare PDF {file_key}: {str(e)}")
                         result['content'] = None
+                elif is_markdown:
+                    # Handle Markdown files
+                    try:
+                        import markdown
+
+                        # Decode markdown content
+                        md_content = file_content.decode('utf-8')
+
+                        # Convert markdown to HTML for better display
+                        html_content = markdown.markdown(md_content, extensions=['extra', 'codehilite'])
+
+                        result['content'] = html_content
+                        result['is_text'] = True
+                        result['content_type'] = 'text/html'  # Override for display
+                        result['raw_content'] = md_content  # Keep raw markdown too
+
+                        logger.info(f"Successfully processed Markdown file: {file_key}")
+                    except Exception as e:
+                        logger.error(f"Failed to process Markdown file {file_key}: {str(e)}")
+                        # Fallback to plain text
+                        try:
+                            result['content'] = file_content.decode('utf-8')
+                            result['is_text'] = True
+                            result['content_type'] = 'text/plain'
+                        except:
+                            result['content'] = None
                 else:
                     result['content'] = None
 
@@ -399,6 +509,53 @@ class S3Manager:
                 'success': False,
                 'error': str(e)
             }
+
+    def _extract_formatted_text(self, paragraph):
+        """
+        Extract text with formatting from a Word paragraph
+
+        Args:
+            paragraph: python-docx paragraph object
+
+        Returns:
+            str: HTML formatted text
+        """
+        try:
+            formatted_parts = []
+
+            for run in paragraph.runs:
+                text = run.text
+                if not text:
+                    continue
+
+                # Escape HTML characters
+                text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+                # Apply formatting
+                if run.bold and run.italic:
+                    text = f'<strong><em>{text}</em></strong>'
+                elif run.bold:
+                    text = f'<strong>{text}</strong>'
+                elif run.italic:
+                    text = f'<em>{text}</em>'
+
+                if run.underline:
+                    text = f'<u>{text}</u>'
+
+                # Handle font color if available
+                if hasattr(run.font, 'color') and run.font.color and run.font.color.rgb:
+                    color = run.font.color.rgb
+                    hex_color = f"#{color.red:02x}{color.green:02x}{color.blue:02x}"
+                    text = f'<span style="color: {hex_color}">{text}</span>'
+
+                formatted_parts.append(text)
+
+            return ''.join(formatted_parts)
+
+        except Exception as e:
+            logger.warning(f"Failed to extract formatting from paragraph: {str(e)}")
+            # Fallback to plain text
+            return paragraph.text
 
 
 # Singleton instance

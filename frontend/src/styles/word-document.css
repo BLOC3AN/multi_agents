@@ -1,0 +1,107 @@
+/* Word Document Styling */
+.word-document {
+  font-family: 'Times New Roman', serif;
+  line-height: 1.6;
+  color: #333;
+}
+
+.word-document h1 {
+  font-size: 1.8rem;
+  font-weight: bold;
+  margin: 1.5rem 0 1rem 0;
+  color: #2c3e50;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 0.5rem;
+}
+
+.word-document h2 {
+  font-size: 1.4rem;
+  font-weight: bold;
+  margin: 1.2rem 0 0.8rem 0;
+  color: #34495e;
+}
+
+.word-document h3 {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin: 1rem 0 0.6rem 0;
+  color: #34495e;
+}
+
+.word-document p {
+  margin: 0.8rem 0;
+  text-align: justify;
+}
+
+/* Text formatting */
+.word-document strong {
+  font-weight: bold;
+}
+
+.word-document em {
+  font-style: italic;
+}
+
+.word-document u {
+  text-decoration: underline;
+}
+
+.word-document strong em,
+.word-document em strong {
+  font-weight: bold;
+  font-style: italic;
+}
+
+.word-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  border: 1px solid #ddd;
+  background: white;
+}
+
+.word-table td {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  vertical-align: top;
+}
+
+.word-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.word-table tr:hover {
+  background-color: #f5f5f5;
+}
+
+/* Dark mode support */
+.dark .word-document {
+  color: #e5e5e5;
+}
+
+.dark .word-document h1 {
+  color: #60a5fa;
+  border-bottom-color: #3b82f6;
+}
+
+.dark .word-document h2,
+.dark .word-document h3 {
+  color: #d1d5db;
+}
+
+.dark .word-table {
+  border-color: #4b5563;
+  background: #374151;
+}
+
+.dark .word-table td {
+  border-color: #4b5563;
+}
+
+.dark .word-table tr:nth-child(even) {
+  background-color: #4b5563;
+}
+
+.dark .word-table tr:hover {
+  background-color: #6b7280;
+}
