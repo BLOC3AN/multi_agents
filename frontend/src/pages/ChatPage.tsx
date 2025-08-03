@@ -28,6 +28,7 @@ const ChatPage: React.FC = () => {
 
   const [isTyping, setIsTyping] = useState(false);
   const [showDropdown, setShowDropdown] = useState<string | null>(null);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousUserIdRef = useRef<string | null>(null);
 
@@ -151,6 +152,9 @@ const ChatPage: React.FC = () => {
 
     // Set session immediately for instant UI feedback
     setCurrentSession(session);
+
+    // Close mobile sidebar when session is selected
+    setShowMobileSidebar(false);
 
     // Check cache first
     const cached = messagesCache.current.get(session.session_id);
@@ -403,10 +407,19 @@ const ChatPage: React.FC = () => {
 
   return (
     <div className="h-screen flex bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
-      <div
-        className="relative h-full shrink-0 overflow-hidden border-r border-gray-200 dark:border-gray-700 max-md:hidden flex flex-col bg-white dark:bg-gray-800"
-        style={{ width: '320px' }}
+      {/* Mobile Sidebar Overlay */}
+      {showMobileSidebar && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 sm:hidden"
+          onClick={() => setShowMobileSidebar(false)}
+        />
+      )}
+
+      {/* Sidebar - 1/7 of screen width */}
+      <div className={`sidebar-scrollbar relative h-full shrink-0 overflow-y-auto overflow-x-hidden border-r border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-gray-800 max-sm:w-full max-sm:fixed max-sm:z-50 max-sm:shadow-xl transition-transform duration-300 ${
+        showMobileSidebar ? 'max-sm:translate-x-0' : 'max-sm:-translate-x-full'
+      }`}
+      style={{ width: 'calc(100vw / 7)' }}
       >
         {/* Error Display */}
         {error && (
@@ -416,12 +429,17 @@ const ChatPage: React.FC = () => {
         )}
 
         {/* New Session */}
-        <div className="p-4">
-          <div className="flex space-x-2">
+        <div className="border-b border-gray-200 dark:border-gray-700" style={{ padding: 'calc(100vw / 7 * 0.05)' }}>
+          <div className="flex" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
             <input
               type="text"
-              placeholder="Session name..."
-              className="flex-1 text-universal-14 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              placeholder="New session..."
+              className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              style={{
+                padding: 'calc(100vw / 7 * 0.025) calc(100vw / 7 * 0.03)',
+                fontSize: 'calc(100vw / 7 * 0.04)',
+                minHeight: 'calc(100vw / 7 * 0.12)'
+              }}
               value={newSessionName}
               onChange={(e) => setNewSessionName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateSession()}
@@ -430,10 +448,22 @@ const ChatPage: React.FC = () => {
             <button
               onClick={handleCreateSession}
               disabled={!authenticated || !newSessionName.trim() || isCreatingSession}
-              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              style={{
+                padding: 'calc(100vw / 7 * 0.025)',
+                fontSize: 'calc(100vw / 7 * 0.04)',
+                minWidth: 'calc(100vw / 7 * 0.12)',
+                minHeight: 'calc(100vw / 7 * 0.12)'
+              }}
             >
               {isCreatingSession ? (
-                <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                <div
+                  className="animate-spin rounded-full border-2 border-white border-t-transparent"
+                  style={{
+                    width: 'calc(100vw / 7 * 0.04)',
+                    height: 'calc(100vw / 7 * 0.04)'
+                  }}
+                ></div>
               ) : (
                 '➕'
               )}
@@ -441,16 +471,16 @@ const ChatPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Spacer to push content to bottom */}
-        <div className="flex-1"></div>
-
         {/* Files Block - Above History Block */}
-        <div className="p-2 pb-1">
+        <div style={{ padding: 'calc(100vw / 7 * 0.02) calc(100vw / 7 * 0.05)' }}>
           <FilesBlock />
         </div>
 
-        {/* History Block - Above User Dropdown */}
-        <div className="p-2 pt-1">
+        {/* Spacer to push History close to User Block */}
+        <div className="flex-1"></div>
+
+        {/* History Block - Positioned above User Block */}
+        <div className="history-block-container flex-shrink-0 min-h-0 overflow-hidden" style={{ padding: '0.5px' }}>
           {isLoadingSessions ? (
             <div className="flex items-center justify-center h-32 text-center text-gray-500 dark:text-gray-400">
               <div>
@@ -478,51 +508,69 @@ const ChatPage: React.FC = () => {
           )}
         </div>
 
-        {/* User Dropdown - Bottom of Sidebar */}
-        <div className="border-t border-gray-200 dark:border-gray-700 p-2">
+        {/* User Dropdown - Bottom of Sidebar - Fixed Position */}
+        <div className="user-block border-t border-gray-200 dark:border-gray-700 relative z-50 bg-white dark:bg-gray-800 flex-shrink-0 mt-auto" style={{ padding: '0.5px' }}>
           <UserDropdown onLogout={handleLogout} />
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex justify-center bg-gray-50 dark:bg-gray-900 overflow-x-hidden h-full">
-        <div className="w-full max-w-[786px] flex flex-col min-w-0 h-full">
-
-
-          {/* Messages */}
-          <div
-            className="flex-1 overflow-y-auto overflow-x-hidden p-4 mx-4 rounded-lg mt-4"
-            style={{
-              backgroundColor: 'var(--bg-elevated-secondary, #f8f9fa)'
-            }}
+      <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden h-full min-w-0">
+        {/* Mobile Header */}
+        <div className="sm:hidden flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setShowMobileSidebar(true)}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
-            <div className="space-y-4 min-w-0">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <h1 className="text-lg font-semibold truncate">
+            {currentSession?.session_name || 'Multi-Agent Chat'}
+          </h1>
+          <div className="w-10" /> {/* Spacer for centering */}
+        </div>
+
+        {/* Chat Content */}
+        <div className="flex-1 flex justify-center overflow-hidden">
+          <div className="w-full max-w-[900px] xl:max-w-[1000px] flex flex-col min-w-0 h-full px-3 lg:px-4 xl:px-6">
+
+
+            {/* Messages */}
+            <div
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-6 mx-0 lg:mx-4 rounded-none lg:rounded-lg mt-3 lg:mt-4"
+              style={{
+                backgroundColor: 'var(--bg-elevated-secondary, #f8f9fa)'
+              }}
+            >
+            <div className="space-y-4 lg:space-y-6 min-w-0">
           {loadingMessages ? (
             <div className="text-center text-gray-600 dark:text-gray-400 py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
               <p className="text-sm font-light">Loading messages...</p>
             </div>
           ) : !currentSession ? (
-            <div className="text-center text-gray-600 dark:text-gray-400 py-8">
-              <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">👋 Welcome!</h3>
-              <p className="mb-6 text-sm font-light">Create a new session or select an existing one to start chatting</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-4 rounded-xl border border-blue-200 dark:border-blue-700 text-center hover:shadow-md transition-shadow">
-                  <div className="text-2xl mb-2">🧮</div>
-                  <div className="font-semibold text-gray-900 dark:text-white">Math & Science</div>
-                  <div className="text-sm font-light text-gray-600 dark:text-gray-400">Solve equations, explain concepts</div>
+            <div className="text-center text-gray-600 dark:text-gray-400 py-8 lg:py-12">
+              <h3 className="text-xl lg:text-2xl font-bold mb-3 lg:mb-4 text-gray-900 dark:text-white">👋 Welcome!</h3>
+              <p className="mb-6 lg:mb-8 text-base lg:text-lg font-light">Create a new session or select an existing one to start chatting</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6 max-w-lg lg:max-w-xl mx-auto">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-5 lg:p-6 rounded-xl border border-blue-200 dark:border-blue-700 text-center hover:shadow-lg transition-all duration-200 hover:scale-105">
+                  <div className="text-3xl lg:text-4xl mb-3 lg:mb-4">🧮</div>
+                  <div className="font-semibold text-lg lg:text-xl text-gray-900 dark:text-white mb-2">Math & Science</div>
+                  <div className="text-sm lg:text-base font-light text-gray-600 dark:text-gray-400">Solve equations, explain concepts</div>
                 </div>
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-4 rounded-xl border border-purple-200 dark:border-purple-700 text-center hover:shadow-md transition-shadow">
-                  <div className="text-2xl mb-2">✍️</div>
-                  <div className="font-semibold text-gray-900 dark:text-white">Writing & Analysis</div>
-                  <div className="text-sm font-light text-gray-600 dark:text-gray-400">Create content, analyze text</div>
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-5 lg:p-6 rounded-xl border border-purple-200 dark:border-purple-700 text-center hover:shadow-lg transition-all duration-200 hover:scale-105">
+                  <div className="text-3xl lg:text-4xl mb-3 lg:mb-4">✍️</div>
+                  <div className="font-semibold text-lg lg:text-xl text-gray-900 dark:text-white mb-2">Writing & Analysis</div>
+                  <div className="text-sm lg:text-base font-light text-gray-600 dark:text-gray-400">Create content, analyze text</div>
                 </div>
               </div>
             </div>
           ) : messages.length === 0 ? (
-            <div className="text-center text-gray-600 dark:text-gray-400 py-8">
-              <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">💬 {currentSession.session_name}</h3>
-              <p className="text-sm font-light">Start typing to begin your conversation with the AI agents</p>
+            <div className="text-center text-gray-600 dark:text-gray-400 py-8 lg:py-12">
+              <h3 className="text-xl lg:text-2xl font-bold mb-3 lg:mb-4 text-gray-900 dark:text-white">💬 {currentSession.session_name}</h3>
+              <p className="text-base lg:text-lg font-light">Start typing to begin your conversation with the AI agents</p>
             </div>
           ) : (
             <>
@@ -530,11 +578,11 @@ const ChatPage: React.FC = () => {
                 <div key={message.message_id} className="space-y-4">
                   {/* User Message */}
                   {message.user_input && (
-                    <div className="flex justify-end mb-4">
-                      <div className="max-w-[80%] bg-gray-100/50 dark:bg-gray-700/50 text-gray-900 dark:text-white rounded-2xl rounded-br-md px-4 py-3 shadow-sm border border-gray-200 dark:border-gray-600 overflow-hidden">
+                    <div className="flex justify-end mb-4 lg:mb-6">
+                      <div className="max-w-[85%] lg:max-w-[75%] xl:max-w-[70%] bg-gray-100/50 dark:bg-gray-700/50 text-gray-900 dark:text-white rounded-2xl rounded-br-md px-4 lg:px-5 py-3 lg:py-4 shadow-sm border border-gray-200 dark:border-gray-600 overflow-hidden">
                         <MessageRenderer
                           content={message.user_input}
-                          className="text-gray-900 dark:text-white text-base font-light [&_p]:text-base [&_p]:font-light [&_*]:text-gray-900 dark:[&_*]:text-white [&_strong]:font-semibold [&_b]:font-semibold [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold"
+                          className="text-gray-900 dark:text-white text-base lg:text-lg font-light [&_p]:text-base lg:[&_p]:text-lg [&_p]:font-light [&_*]:text-gray-900 dark:[&_*]:text-white [&_strong]:font-semibold [&_b]:font-semibold [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold"
                         />
                       </div>
                     </div>
@@ -542,21 +590,21 @@ const ChatPage: React.FC = () => {
 
                   {/* Agent Response */}
                   {message.agent_response && (
-                    <div className="mb-4">
+                    <div className="mb-4 lg:mb-6">
                       <div
-                        className="w-full text-gray-900 dark:text-white rounded-2xl px-4 py-3 shadow-sm overflow-hidden"
+                        className="w-full text-gray-900 dark:text-white rounded-2xl px-4 lg:px-5 py-3 lg:py-4 shadow-sm overflow-hidden"
                         style={{
                           backgroundColor: 'var(--bg-elevated-secondary, #f8f9fa)'
                         }}
                       >
                         <MessageRenderer
                           content={message.agent_response}
-                          className="text-gray-900 dark:text-white text-base font-light [&_p]:text-base [&_p]:font-light [&_strong]:font-semibold [&_b]:font-semibold [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold"
+                          className="text-gray-900 dark:text-white text-base lg:text-lg font-light [&_p]:text-base lg:[&_p]:text-lg [&_p]:font-light [&_strong]:font-semibold [&_b]:font-semibold [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold"
                         />
                       </div>
                       {/* Copy Message Button and Processing Time */}
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center space-x-3 text-sm text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center justify-between mt-3 lg:mt-4">
+                        <div className="flex items-center space-x-3 lg:space-x-4 text-sm lg:text-base text-gray-500 dark:text-gray-400">
                           {message.processing_time && (
                             <span>⚡ {(message.processing_time / 1000).toFixed(1)}s</span>
                           )}
@@ -569,15 +617,15 @@ const ChatPage: React.FC = () => {
                         </div>
                         <button
                           onClick={() => copyMessageContent(message.agent_response || '', message.message_id)}
-                          className="p-1 rounded transition-colors group"
+                          className="p-2 lg:p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
                           title={copiedMessageId === message.message_id ? "Copied!" : "Copy message"}
                         >
                           {copiedMessageId === message.message_id ? (
-                            <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5 lg:w-6 lg:h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                           ) : (
-                            <svg className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5 lg:w-6 lg:h-6 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                           )}
@@ -592,7 +640,7 @@ const ChatPage: React.FC = () => {
 
               {/* Typing Animation */}
               {isTyping && (
-                <div className="mb-4">
+                <div className="mb-4 lg:mb-6">
                   <TypingAnimation />
                 </div>
               )}
@@ -603,33 +651,34 @@ const ChatPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Input - Always visible */}
-          {true && (
-            <div
-              className="p-4 mx-4 mb-4 rounded-lg shadow-sm"
-              style={{
-                backgroundColor: 'var(--bg-elevated-secondary, #f8f9fa)'
-              }}
-            >
-              <form onSubmit={handleSendMessage} className="flex space-x-3">
-                <input
-                  type="text"
-                  placeholder="Ask me anything! I can solve math, write poems, explain concepts..."
-                  className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-universal-14"
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  disabled={!authenticated}
-                />
-                <button
-                  type="submit"
-                  disabled={!authenticated || !messageInput.trim()}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  🚀 Send
-                </button>
-            </form>
+            {/* Input - Always visible */}
+            {true && (
+              <div
+                className="p-4 lg:p-6 mx-0 lg:mx-4 mb-4 lg:mb-6 rounded-none lg:rounded-lg shadow-sm"
+                style={{
+                  backgroundColor: 'var(--bg-elevated-secondary, #f8f9fa)'
+                }}
+              >
+                <form onSubmit={handleSendMessage} className="flex space-x-3 lg:space-x-4">
+                  <input
+                    type="text"
+                    placeholder="Ask me anything! I can solve math, write poems, explain concepts..."
+                    className="flex-1 px-4 lg:px-5 py-3 lg:py-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base lg:text-lg"
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    disabled={!authenticated}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!authenticated || !messageInput.trim()}
+                    className="px-6 lg:px-8 py-3 lg:py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-base lg:text-lg"
+                  >
+                    🚀 Send
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
-        )}
         </div>
       </div>
     </div>

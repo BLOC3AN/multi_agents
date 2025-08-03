@@ -18,6 +18,7 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load files on component mount
@@ -158,13 +159,25 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
   };
 
   return (
-    <div className={`w-full h-[400px] flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-colors duration-200 ${className}`}>
+    <div
+      className={`w-full flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-all duration-200 overflow-hidden ${className}`}
+      style={{
+        minHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.2)',
+        maxHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.3)'
+      }}
+    >
       {/* Files Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="flex items-center space-x-2">
+      <div
+        className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 flex-shrink-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        style={{ padding: 'calc(100vw / 7 * 0.04)' }}
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
+        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
           <svg
-            width="18"
-            height="18"
+            style={{
+              width: 'calc(100vw / 7 * 0.065)',
+              height: 'calc(100vw / 7 * 0.065)'
+            }}
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -176,51 +189,117 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
             />
             <polyline points="13,2 13,9 20,9" stroke="currentColor" />
           </svg>
-          <h3 className="text-lg font-normal text-gray-900 dark:text-white">Files</h3>
+          <h3
+            className="font-medium text-gray-900 dark:text-white"
+            style={{ fontSize: 'calc(100vw / 7 * 0.06)' }}
+          >
+            Files
+          </h3>
         </div>
-        <div className="flex items-center space-x-2">
-          <div className="text-sm font-light text-gray-500 dark:text-gray-400">
+        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
+          <div
+            className="font-light text-gray-500 dark:text-gray-400"
+            style={{ fontSize: 'calc(100vw / 7 * 0.035)' }}
+          >
             ({files.length})
           </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title="Upload files"
+          {!isCollapsed && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+                disabled={uploading}
+                className="rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                style={{ padding: 'calc(100vw / 7 * 0.01)' }}
+                title="Upload files"
+              >
+                <svg
+                  style={{
+                    width: 'calc(100vw / 7 * 0.055)',
+                    height: 'calc(100vw / 7 * 0.055)'
+                  }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7,10 12,5 17,10" />
+                  <line x1="12" y1="5" x2="12" y2="15" />
+                </svg>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  loadFiles();
+                }}
+                disabled={loading}
+                className="rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                style={{ padding: 'calc(100vw / 7 * 0.01)' }}
+                title="Refresh"
+              >
+                <svg
+                  style={{
+                    width: 'calc(100vw / 7 * 0.055)',
+                    height: 'calc(100vw / 7 * 0.055)'
+                  }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className={loading ? 'animate-spin' : ''}
+                >
+                  <polyline points="23,4 23,10 17,10" />
+                  <polyline points="1,20 1,14 7,14" />
+                  <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                </svg>
+              </button>
+            </>
+          )}
+          {/* Collapse/Expand Icon */}
+          <svg
+            style={{
+              width: 'calc(100vw / 7 * 0.06)',
+              height: 'calc(100vw / 7 * 0.06)'
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className={`stroke-[2] text-gray-400 transition-transform duration-200 ${
+              isCollapsed ? 'rotate-180' : ''
+            }`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7,10 12,5 17,10" />
-              <line x1="12" y1="5" x2="12" y2="15" />
-            </svg>
-          </button>
-          <button
-            onClick={loadFiles}
-            disabled={loading}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title="Refresh"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={loading ? 'animate-spin' : ''}>
-              <polyline points="23,4 23,10 17,10" />
-              <polyline points="1,20 1,14 7,14" />
-              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
-            </svg>
-          </button>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
         </div>
       </div>
 
-      {/* Upload Area */}
-      <div
-        className={`border-2 border-dashed rounded-lg m-2 p-4 text-center transition-colors ${
-          dragOver
-            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-            : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
-        }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-      >
+      {/* Files Content - Collapsible */}
+      {!isCollapsed && (
+        <>
+          {/* Upload Area */}
+          <div
+            className={`border-2 border-dashed rounded-lg transition-colors ${
+              dragOver
+                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+            }`}
+            style={{
+              margin: 'calc(100vw / 7 * 0.02)',
+              padding: 'calc(100vw / 7 * 0.04)'
+            }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
         <input
           ref={fileInputRef}
           type="file"
@@ -234,26 +313,35 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Uploading...</span>
           </div>
         ) : (
-          <div className="cursor-pointer">
-            <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="cursor-pointer flex items-center justify-center">
+            <svg
+              className="text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              style={{
+                width: 'calc(100vw / 7 * 0.08)',
+                height: 'calc(100vw / 7 * 0.08)'
+              }}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-              Drop files here or click to upload
-            </p>
           </div>
         )}
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mx-2 mb-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
-          {error}
-        </div>
-      )}
+            <div className="mx-2 mb-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
+              {error}
+            </div>
+          )}
 
-      {/* Files List */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
+          {/* Files List */}
+          <div
+            className="flex-1 overflow-y-auto files-list-scrollbar"
+            style={{ padding: 'calc(100vw / 7 * 0.02)' }}
+          >
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
@@ -261,8 +349,18 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
         ) : files.length === 0 ? (
           <div className="flex items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
             <div>
-              <div className="mb-2">📁 No files yet</div>
-              <div className="text-sm font-light">Upload some files to get started</div>
+              <div
+                className="mb-2"
+                style={{ fontSize: 'calc(100vw / 7 * 0.07)' }}
+              >
+                📁 No files yet
+              </div>
+              <div
+                className="font-light"
+                style={{ fontSize: 'calc(100vw / 7 * 0.05)' }}
+              >
+                Upload some files to get started
+              </div>
             </div>
           </div>
         ) : (
@@ -309,7 +407,9 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "" }) => {
             ))}
           </div>
         )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

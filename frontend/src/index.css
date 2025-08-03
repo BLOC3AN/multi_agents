@@ -63,14 +63,24 @@
 
 @layer base {
   :root {
-    /* Sidebar variables */
-    --sidebar-width: 320px;
+    /* Sidebar variables - 1/7 of screen width */
+    --sidebar-width: calc(100vw / 7);
+    --sidebar-padding: calc(100vw / 7 * 0.05);
+    --sidebar-gap: calc(100vw / 7 * 0.02);
+    --sidebar-font-base: calc(100vw / 7 * 0.04);
+    --sidebar-font-small: calc(100vw / 7 * 0.035);
+    --sidebar-icon-size: calc(100vw / 7 * 0.05);
+
     --bg-elevated-secondary: #f8f9fa;
     --border-token-border-light: #e5e7eb;
 
     /* Message variables */
     --user-message-bg: #2563eb;
     --agent-message-bg: var(--bg-elevated-secondary);
+
+    /* Content area - remaining 6/7 of screen */
+    --content-max-width: calc(100vw * 6 / 7 - 2rem);
+    --message-spacing: 1.5rem;
   }
 
   /* Dark mode overrides */
@@ -170,18 +180,18 @@
     line-height: 1.3;
   }
 
-  /* Message specific styles */
+  /* Message specific styles - Optimized for 15.6" laptop */
   .message-text {
     font-family: 'UniversalSans', 'Helvetica Neue', 'Helvetica', 'Arial', system-ui, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: 16px;
+    line-height: 1.6;
     font-weight: 300;
     letter-spacing: -0.01em;
   }
 
   .session-title {
     font-family: 'UniversalSans', 'Helvetica Neue', 'Helvetica', 'Arial', system-ui, sans-serif;
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.4;
     font-weight: 400;
     letter-spacing: -0.01em;
@@ -213,7 +223,7 @@
     font-weight: 700;
   }
 
-  /* GitHub-style Markdown content styling */
+  /* GitHub-style Markdown content styling - Optimized for 15.6" laptop */
   .message-renderer {
     font-family: 'UniversalSans', 'Helvetica Neue', 'Helvetica', 'Arial', system-ui, sans-serif;
     line-height: 1.6;
@@ -221,6 +231,23 @@
     overflow-x: hidden;
     word-wrap: break-word;
     overflow-wrap: break-word;
+  }
+
+  /* Laptop-specific message styling */
+  @media (min-width: 1024px) and (max-width: 1440px) {
+    .message-renderer {
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .message-renderer p {
+      margin-bottom: 1rem;
+    }
+
+    .message-renderer h1, .message-renderer h2, .message-renderer h3 {
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+    }
   }
 
   .github-markdown {
@@ -945,30 +972,341 @@
     white-space: pre;
   }
 
-  /* Responsive utilities */
-  @media (max-width: 768px) {
-    .max-md\:hidden {
-      display: none;
+  /* Responsive utilities - Optimized for 15.6" laptop */
+  @media (min-width: 1024px) and (max-width: 1440px) {
+    /* Laptop 15.6" optimization */
+    :root {
+      --sidebar-width: 320px;
+      --content-max-width: 900px;
     }
 
+    .message-renderer {
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    /* Better spacing for laptop screens */
+    .message-renderer .github-code-block {
+      font-size: 14px;
+    }
+  }
+
+  @media (max-width: 1023px) {
     :root {
-      --sidebar-width: 280px;
+      --sidebar-width: 256px;
+      --content-max-width: 768px;
+    }
+
+    /* Adjust message spacing on tablets */
+    .message-renderer {
+      font-size: 15px;
     }
   }
 
   @media (max-width: 640px) {
     :root {
       --sidebar-width: 100vw;
+      --content-max-width: 100%;
     }
+
+    /* Mobile optimizations */
+    .message-renderer {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Reduce padding on mobile */
+    .message-renderer .github-code-block {
+      font-size: 12px;
+    }
+
+    /* Smaller math on mobile */
+    .MathJax {
+      font-size: 0.85em !important;
+    }
+
+    /* Compact lists on mobile */
+    .github-list {
+      padding-left: 1.5em;
+    }
+  }
+
+  @media (max-width: 480px) {
+    /* Extra small screens */
+    .message-renderer {
+      font-size: 13px;
+    }
+
+    .MathJax {
+      font-size: 0.8em !important;
+    }
+  }
+
+  /* Sidebar specific styles - 1/7 screen width */
+  .sidebar-container {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    flex-shrink: 0;
+  }
+
+  /* Custom scrollbar for sidebar */
+  .sidebar-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar {
+    width: calc(100vw / 7 * 0.02); /* Scale scrollbar width with sidebar */
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: calc(100vw / 7 * 0.01);
+    border: none;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.7);
+  }
+
+  /* Dark mode scrollbar */
+  .dark .sidebar-scrollbar {
+    scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
+  }
+
+  .dark .sidebar-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.5);
+  }
+
+  .dark .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(75, 85, 99, 0.7);
+  }
+
+  /* User dropdown z-index fix */
+  .user-dropdown-container {
+    position: relative;
+    z-index: 9999;
+  }
+
+  .user-dropdown-menu {
+    position: absolute;
+    z-index: 9999;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: 0.5rem;
+  }
+
+  /* User block protection */
+  .user-block {
+    background-color: inherit;
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+    min-height: calc(100vw / 7 * 0.2);
+  }
+
+  /* History block containment */
+  .history-block-container {
+    overflow: hidden;
+    max-height: calc(100vh - 200px); /* Reserve space for other blocks */
+  }
+
+  /* History sessions scrollbar */
+  .history-sessions-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  }
+
+  .history-sessions-scrollbar::-webkit-scrollbar {
+    width: calc(100vw / 7 * 0.015); /* Thinner scrollbar */
+  }
+
+  .history-sessions-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .history-sessions-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.3);
+    border-radius: calc(100vw / 7 * 0.008);
+    border: none;
+  }
+
+  .history-sessions-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.5);
+  }
+
+  /* Dark mode history scrollbar */
+  .dark .history-sessions-scrollbar {
+    scrollbar-color: rgba(75, 85, 99, 0.3) transparent;
+  }
+
+  .dark .history-sessions-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.3);
+  }
+
+  .dark .history-sessions-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(75, 85, 99, 0.5);
+  }
+
+  /* Files list scrollbar */
+  .files-list-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  }
+
+  .files-list-scrollbar::-webkit-scrollbar {
+    width: calc(100vw / 7 * 0.015);
+  }
+
+  .files-list-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .files-list-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.3);
+    border-radius: calc(100vw / 7 * 0.008);
+    border: none;
+  }
+
+  .files-list-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.5);
+  }
+
+  /* Dark mode files scrollbar */
+  .dark .files-list-scrollbar {
+    scrollbar-color: rgba(75, 85, 99, 0.3) transparent;
+  }
+
+  .dark .files-list-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.3);
+  }
+
+  .dark .files-list-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(75, 85, 99, 0.5);
+  }
+
+  /* Custom scrollbar for sidebar */
+  .sidebar-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar {
+    width: calc(100vw / 7 * 0.015); /* Scale scrollbar width */
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: calc(100vw / 7 * 0.01);
+    border: none;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.7);
+  }
+
+  /* Dark mode scrollbar */
+  .dark .sidebar-scrollbar {
+    scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
+  }
+
+  .dark .sidebar-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.5);
+  }
+
+  .dark .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(75, 85, 99, 0.7);
   }
 
   /* History block specific styles */
   .history-block {
-    height: 528px;
+    height: 500px;
   }
 
   .history-sessions-container {
-    max-height: calc(528px - 120px); /* Subtract header and button space */
+    max-height: calc(500px - 120px); /* Subtract header and button space */
+  }
+
+  /* Ensure proper layout and no overlap */
+  .main-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .main-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* Responsive scaling for different screen sizes */
+  @media (min-width: 1024px) {
+    .sidebar-container {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      max-width: var(--sidebar-width);
+      flex-shrink: 0;
+    }
+
+    .history-block {
+      height: calc(100vh * 0.6);
+    }
+  }
+
+  /* Mobile override - full width sidebar */
+  @media (max-width: 640px) {
+    :root {
+      --sidebar-width: 100vw;
+    }
+  }
+
+  /* Mobile sidebar transition */
+  .mobile-sidebar-transition {
+    transition: transform 0.3s ease-in-out;
+  }
+
+  /* Chat container optimizations for laptop 15.6" */
+  @media (min-width: 1024px) and (max-width: 1440px) {
+    /* Better chat spacing */
+    .space-y-4 > * + * {
+      margin-top: 1.5rem;
+    }
+
+    /* Enhanced message bubbles */
+    .message-bubble {
+      padding: 1.25rem 1.5rem;
+      border-radius: 1rem;
+    }
+
+    /* Improved button sizes */
+    button {
+      min-height: 40px;
+      padding: 0.75rem 1.5rem;
+    }
+  }
+
+  /* Touch-friendly tap targets on mobile */
+  @media (max-width: 640px) {
+    button, .cursor-pointer {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* Larger touch targets for session items */
+    .session-item {
+      min-height: 48px;
+    }
   }
 
   /* Session item hover effects */

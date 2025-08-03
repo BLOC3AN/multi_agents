@@ -62,27 +62,48 @@ const UserDropdown: React.FC<UserDropdownProps> = ({ onLogout }) => {
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative user-dropdown-container" ref={dropdownRef}>
       {/* Avatar Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-3 p-3 w-full hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+        className="flex items-center w-full hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+        style={{
+          padding: '0.5px',
+          gap: 'calc(100vw / 7 * 0.02)'
+        }}
       >
-        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
+        <div
+          className="bg-blue-600 rounded-full flex items-center justify-center text-white font-medium"
+          style={{
+            width: 'calc(100vw / 7 * 0.1)',
+            height: 'calc(100vw / 7 * 0.1)',
+            fontSize: 'calc(100vw / 7 * 0.045)'
+          }}
+        >
           {getUserInitial()}
         </div>
         <div className="flex-1 min-w-0 text-left">
-          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+          <div
+            className="font-semibold text-gray-900 dark:text-white truncate"
+            style={{ fontSize: 'calc(100vw / 7 * 0.055)' }}
+          >
             {getUserDisplayName()}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div
+            className="text-gray-500 dark:text-gray-400"
+            style={{ fontSize: 'calc(100vw / 7 * 0.04)' }}
+          >
             {user?.user_id === 'admin' ? 'Administrator' : 'User'}
           </div>
         </div>
-        <svg 
-          className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none" 
-          stroke="currentColor" 
+        <svg
+          className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          style={{
+            width: 'calc(100vw / 7 * 0.055)',
+            height: 'calc(100vw / 7 * 0.055)'
+          }}
+          fill="none"
+          stroke="currentColor"
           viewBox="0 0 24 24"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -91,7 +112,7 @@ const UserDropdown: React.FC<UserDropdownProps> = ({ onLogout }) => {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-600 z-50 overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+        <div className="user-dropdown-menu bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-600 overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
           {/* Theme Toggle */}
           <button
             onClick={handleThemeToggle}

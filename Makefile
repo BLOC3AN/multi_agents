@@ -16,6 +16,9 @@ REACT_PID_FILE := .react.pid
 # Python executable detection
 PYTHON := $(shell command -v python3.10 2>/dev/null || command -v python3.11 2>/dev/null || command -v python3.12 2>/dev/null || echo python3)
 
+# Docker Compose command detection
+DOCKER_COMPOSE := $(shell command -v docker-compose 2>/dev/null && echo docker-compose || (docker compose version >/dev/null 2>&1 && echo "docker compose" || echo ""))
+
 # Default target
 help: ## Show available commands
 	@echo "🚀 Multi-Agent System Commands:"
@@ -27,17 +30,24 @@ check-deps: ## Check if Python and required tools are installed
 	@echo "🐍 Detected Python: $(PYTHON)"
 	@command -v $(PYTHON) >/dev/null 2>&1 || { echo "❌ Python not found"; exit 1; }
 	@command -v docker >/dev/null 2>&1 || { echo "❌ Docker not installed"; exit 1; }
+	@if [ -z "$(DOCKER_COMPOSE)" ]; then echo "❌ Docker Compose not found (tried 'docker-compose' and 'docker compose')"; exit 1; fi
 	@command -v streamlit >/dev/null 2>&1 || { echo "⚠️  Streamlit not installed (will be installed with dependencies)"; }
 	@echo "✅ Python: $$($(PYTHON) --version)"
 	@$(PYTHON) -c "import sys; exit(0 if sys.version_info >= (3, 10) else 1)" || { echo "❌ Python 3.10+ required (current: $$($(PYTHON) --version))"; echo "� Try: python3.10 --version or see PYTHON_UPGRADE_GUIDE.md"; exit 1; }
 	@echo "✅ Docker: $$(docker --version)"
+	@echo "✅ Docker Compose: $(DOCKER_COMPOSE)"
 	@if command -v streamlit >/dev/null 2>&1; then echo "✅ Streamlit: $$(streamlit --version)"; fi
 
 # Install dependencies
 install: check-deps ## Install Python dependencies
-	@echo "📦 Installing dependencies..."
-	@$(PYTHON) -m pip install -r requirements.txt
-	@echo "✅ Dependencies installed"
+	@echo "📦 Checking Python dependencies..."
+	@if ! $(PYTHON) -c "import socketio, fastapi, uvicorn" 2>/dev/null; then \
+		echo "📦 Installing Python dependencies..."; \
+		$(PYTHON) -m pip install -r requirements.txt; \
+		echo "✅ Python dependencies installed"; \
+	else \
+		echo "✅ Python dependencies already installed"; \
+	fi
 
 # Setup environment
 setup: ## Setup environment (create directories, check .env)
@@ -57,7 +67,7 @@ setup: ## Setup environment (create directories, check .env)
 	@echo "✅ Environment setup completed"
 
 # Development mode (recommended) - Start all services
-dev: setup ## Quick development start with all services
+dev: setup install install-react ## Quick development start with all services
 	@echo "🚀 Starting development environment..."
 	@echo ""
 	@echo "[1/4] 🔄 Starting Redis..."
@@ -119,9 +129,14 @@ up-auth: ## Start Authentication API server
 
 # React Frontend Commands
 install-react: ## Install React frontend dependencies
-	@echo "📦 Installing React frontend dependencies..."
-	@cd frontend && npm install
-	@echo "✅ React dependencies installed"
+	@echo "📦 Checking React frontend dependencies..."
+	@if [ ! -d "frontend/node_modules" ] || [ ! -f "frontend/package-lock.json" ]; then \
+		echo "📦 Installing React frontend dependencies..."; \
+		cd frontend && npm install; \
+		echo "✅ React dependencies installed"; \
+	else \
+		echo "✅ React dependencies already installed"; \
+	fi
 
 setup-react: install-react ## Setup React frontend environment
 	@echo "🔧 Setting up React frontend..."
@@ -234,7 +249,7 @@ logs-auth: ## Show Authentication API logs
 
 logs-redis: ## Show Redis logs
 	@echo "📋 Redis logs:"
-	@cd deployment && docker-compose logs -f redis
+	@cd deployment && $(DOCKER_COMPOSE) logs -f redis
 
 # Service status
 status: ## Show service status
@@ -269,7 +284,7 @@ status: ## Show service status
 	    echo "⭕ React Frontend: Not running"; \
 	fi
 	@echo -n "🔄 Redis: "
-	@cd deployment && docker-compose ps redis --format "table" | grep -q "Up" && echo "✅ Running" || echo "❌ Not running"
+	@cd deployment && $(DOCKER_COMPOSE) ps redis --format "table" | grep -q "Up" && echo "✅ Running" || echo "❌ Not running"
 
 # Health check
 health: ## Check service health
@@ -334,7 +349,7 @@ format-check: ## Check if code is properly formatted
 # Docker Management
 docker-build: ## Build Docker images
 	@echo "🐳 Building Docker images..."
-	@cd deployment && docker-compose build --no-cache
+	@cd deployment && $(DOCKER_COMPOSE) build --no-cache
 	@echo "✅ Docker images built"
 
 docker-up: ## Start services with Docker
@@ -343,7 +358,7 @@ docker-up: ## Start services with Docker
 	    echo "❌ .env file not found. Run 'make setup' first"; \
 	    exit 1; \
 	fi
-	@cd deployment && docker-compose up -d redis socketio-server streamlit-gui
+	@cd deployment && $(DOCKER_COMPOSE) up -d redis socketio-server streamlit-gui
 	@echo "⏳ Waiting for services..."
 	@sleep 10
 	@make docker-status
@@ -351,20 +366,20 @@ docker-up: ## Start services with Docker
 
 docker-down: ## Stop Docker services
 	@echo "🐳 Stopping Docker services..."
-	@cd deployment && docker-compose down
+	@cd deployment && $(DOCKER_COMPOSE) down
 	@echo "✅ Docker services stopped"
 
 docker-logs: ## Show Docker logs
 	@echo "📋 Docker logs:"
-	@cd deployment && docker-compose logs -f
+	@cd deployment && $(DOCKER_COMPOSE) logs -f
 
 docker-status: ## Show Docker service status
 	@echo "📊 Docker Service Status:"
-	@cd deployment && docker-compose ps
+	@cd deployment && $(DOCKER_COMPOSE) ps
 
 docker-clean: ## Clean up Docker containers and images
 	@echo "🧹 Cleaning Docker resources..."
-	@cd deployment && docker-compose down --volumes --remove-orphans
+	@cd deployment && $(DOCKER_COMPOSE) down --volumes --remove-orphans
 	@docker system prune -f
 	@echo "✅ Docker cleanup completed"
 

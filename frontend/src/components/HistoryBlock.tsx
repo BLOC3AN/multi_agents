@@ -35,6 +35,7 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
   isSelectingSession,
 }) => {
   const [isDropdownHovered, setIsDropdownHovered] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Auto-close dropdown after 1 second (unless hovered)
   useEffect(() => {
@@ -59,13 +60,25 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
 
 
   return (
-    <div className="w-full h-[500px] flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-colors duration-200">
+    <div
+      className="w-full flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-all duration-200 overflow-hidden"
+      style={{
+        minHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.2)',
+        maxHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.35)'
+      }}
+    >
       {/* History Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="flex items-center space-x-2">
+      <div
+        className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 flex-shrink-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        style={{ padding: 'calc(100vw / 7 * 0.03)' }}
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
+        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
           <svg
-            width="18"
-            height="18"
+            style={{
+              width: 'calc(100vw / 7 * 0.065)',
+              height: 'calc(100vw / 7 * 0.065)'
+            }}
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -80,34 +93,74 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
               stroke="currentColor"
             />
           </svg>
-          <h3 className="text-lg font-normal text-gray-900 dark:text-white">History</h3>
+          <h3
+            className="font-medium text-gray-900 dark:text-white"
+            style={{ fontSize: 'calc(100vw / 7 * 0.06)' }}
+          >
+            History
+          </h3>
         </div>
-        <div className="text-sm font-light text-gray-500 dark:text-gray-400">
-          ({sessions.length})
+        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
+          <div
+            className="font-light text-gray-500 dark:text-gray-400"
+            style={{ fontSize: 'calc(100vw / 7 * 0.035)' }}
+          >
+            ({sessions.length})
+          </div>
+          {/* Collapse/Expand Icon */}
+          <svg
+            style={{
+              width: 'calc(100vw / 7 * 0.06)',
+              height: 'calc(100vw / 7 * 0.06)'
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className={`stroke-[2] text-gray-400 transition-transform duration-200 ${
+              isCollapsed ? 'rotate-180' : ''
+            }`}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
         </div>
       </div>
 
-      {/* Sessions List Container - Scrollable */}
-      <div className="flex-1 overflow-y-auto overflow-x-visible px-2 py-1">
-        {sessions.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
-            <div>
-              <div className="mb-2">📝 No sessions yet</div>
-              <div className="text-sm font-light">Create a new session to start chatting</div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {sortedSessions.map((session) => (
+      {/* Sessions List Container - Collapsible and Scrollable */}
+      {!isCollapsed && (
+        <div
+          className="flex-1 overflow-y-auto overflow-x-visible history-sessions-scrollbar"
+          style={{ padding: '0.5px' }}
+        >
+          {sessions.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
+              <div>
+                <div className="mb-2">📝 No sessions yet</div>
                 <div
-                  key={session.session_id}
-                  className={`group px-3 py-2 rounded-lg transition-colors duration-150 ease-in-out border border-transparent ${
-                    currentSession?.session_id === session.session_id
-                      ? 'bg-gray-100/50 dark:bg-gray-700/50 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-600'
-                      : 'hover:bg-gray-100/50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-white hover:shadow-sm hover:border-gray-200 dark:hover:border-gray-600'
-                  } ${isSelectingSession ? 'pointer-events-none opacity-75' : 'cursor-pointer'}`}
-                  onClick={(e) => onSessionSelect(session, e)}
+                  className="font-light"
+                  style={{ fontSize: 'calc(100vw / 7 * 0.03)' }}
                 >
+                  Create a new session to start chatting
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ gap: 'calc(100vw / 7 * 0.005)' }} className="flex flex-col">
+              {sortedSessions.map((session) => (
+                  <div
+                    key={session.session_id}
+                    className={`group rounded-lg transition-colors duration-150 ease-in-out border border-transparent ${
+                      currentSession?.session_id === session.session_id
+                        ? 'bg-gray-100/50 dark:bg-gray-700/50 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-600'
+                        : 'hover:bg-gray-100/50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-white hover:shadow-sm hover:border-gray-200 dark:hover:border-gray-600'
+                    } ${isSelectingSession ? 'pointer-events-none opacity-75' : 'cursor-pointer'}`}
+                    style={{ padding: '0.5px calc(100vw / 7 * 0.03)' }}
+                    onClick={(e) => onSessionSelect(session, e)}
+                  >
                   <div className="flex items-center justify-between w-full">
                     {editingSessionId === session.session_id ? (
                       <div className="flex-1 flex items-center">
@@ -200,9 +253,10 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
                   </div>
                 </div>
               ))}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
