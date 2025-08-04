@@ -13,6 +13,20 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Import Qdrant model for vector database operations
+try:
+    from .model_qdrant import (
+        QdrantConfig,
+        VectorDocument,
+        get_qdrant_config,
+        create_vector_document,
+        generate_document_id
+    )
+    QDRANT_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Qdrant model not available: {e}")
+    QDRANT_AVAILABLE = False
+
 
 @dataclass
 class User:
@@ -453,4 +467,93 @@ def list_admins(active_only: bool = True) -> List[Dict[str, Any]]:
 
     except Exception as e:
         print(f"❌ Failed to list admins: {e}")
+        return []
+
+
+# Qdrant Vector Database utilities
+def is_qdrant_available() -> bool:
+    """Check if Qdrant vector database is available."""
+    return QDRANT_AVAILABLE
+
+
+def get_vector_db_info() -> Optional[Dict[str, Any]]:
+    """Get vector database information if available."""
+    if not QDRANT_AVAILABLE:
+        return None
+
+    try:
+        qdrant = get_qdrant_config()
+        return qdrant.get_collection_info()
+    except Exception as e:
+        print(f"❌ Failed to get vector DB info: {e}")
+        return None
+
+
+def store_vector_document(text: str,
+                         embedding: List[float],
+                         title: str = None,
+                         source: str = None,
+                         **kwargs) -> Optional[str]:
+    """
+    Store a document with its vector embedding.
+
+    Args:
+        text: Document text content
+        embedding: Vector embedding (1024 dimensions)
+        title: Document title
+        source: Document source
+        **kwargs: Additional metadata
+
+    Returns:
+        Document ID if successful, None otherwise
+    """
+    if not QDRANT_AVAILABLE:
+        print("❌ Qdrant not available")
+        return None
+
+    try:
+        qdrant = get_qdrant_config()
+        doc = create_vector_document(
+            text=text,
+            title=title,
+            source=source,
+            **kwargs
+        )
+
+        success = qdrant.upsert_document(doc, embedding)
+        return doc.id if success else None
+
+    except Exception as e:
+        print(f"❌ Failed to store vector document: {e}")
+        return None
+
+
+def search_vector_documents(query_embedding: List[float],
+                           limit: int = 10,
+                           score_threshold: float = 0.7) -> List[Dict[str, Any]]:
+    """
+    Search for similar documents using vector embedding.
+
+    Args:
+        query_embedding: Query vector embedding
+        limit: Maximum number of results
+        score_threshold: Minimum similarity score
+
+    Returns:
+        List of similar documents with scores
+    """
+    if not QDRANT_AVAILABLE:
+        print("❌ Qdrant not available")
+        return []
+
+    try:
+        qdrant = get_qdrant_config()
+        return qdrant.search_similar(
+            query_vector=query_embedding,
+            limit=limit,
+            score_threshold=score_threshold
+        )
+
+    except Exception as e:
+        print(f"❌ Failed to search vector documents: {e}")
         return []
