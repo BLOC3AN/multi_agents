@@ -41,12 +41,18 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
   const [isDropdownHovered, setIsDropdownHovered] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownMenuRef = useRef<HTMLDivElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
   // Click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      // Check if click is outside both the dropdown button and the dropdown menu
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(target) &&
+        dropdownMenuRef.current && !dropdownMenuRef.current.contains(target)
+      ) {
         setShowDropdown(null);
       }
     };
@@ -271,6 +277,7 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
 
                           {showDropdown === session.session_id && (
                             <div
+                              ref={dropdownMenuRef}
                               className="fixed bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-visible session-dropdown"
                               style={{
                                 zIndex: 10001, // Higher than user-dropdown and sidebar
@@ -296,7 +303,10 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
                                 <span className="font-normal whitespace-nowrap">Edit Name</span>
                               </button>
                               <button
-                                onClick={(e) => onDeleteSession(session.session_id, e)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteSession(session.session_id, e);
+                                }}
                                 disabled={deletingSessionId === session.session_id}
                                 className={`w-full px-4 py-3 text-left text-sm rounded-b-lg flex items-center space-x-3 transition-colors min-h-[44px] ${
                                   deletingSessionId === session.session_id

@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
+import mammoth from 'mammoth';
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
@@ -51,6 +52,14 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   useEffect(() => {
     if (isOpen && fileKey) {
       loadFileContent();
+    } else if (!isOpen) {
+      // Reset state when modal closes
+      setFileContent(null);
+      setWordHtmlContent(null);
+      setWordProcessing(false);
+      setError(null);
+      setPageNumber(1);
+      setNumPages(0);
     }
   }, [isOpen, fileKey]);
 
@@ -81,8 +90,40 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     setPageNumber(1);
   };
 
+  const [wordHtmlContent, setWordHtmlContent] = useState<string | null>(null);
+  const [wordProcessing, setWordProcessing] = useState(false);
+
+  // Process Word document with mammoth if backend didn't provide HTML
+  useEffect(() => {
+    if (fileContent?.is_docx && !fileContent?.content && fileContent?.raw_content && !wordHtmlContent && !wordProcessing) {
+      setWordProcessing(true);
+
+      // Convert base64 to ArrayBuffer
+      const base64Data = fileContent.raw_content;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      // Use mammoth to convert to HTML
+      mammoth.convertToHtml({ arrayBuffer: bytes.buffer })
+        .then((result) => {
+          setWordHtmlContent(result.value);
+          setWordProcessing(false);
+          if (result.messages.length > 0) {
+            console.warn('Mammoth conversion warnings:', result.messages);
+          }
+        })
+        .catch((error) => {
+          console.error('Error converting Word document:', error);
+          setWordProcessing(false);
+        });
+    }
+  }, [fileContent, wordHtmlContent, wordProcessing]);
+
   const renderWordDocument = () => {
-    if (!fileContent?.content && !fileContent?.raw_content) {
+    if (!fileContent?.content && !fileContent?.raw_content && !wordHtmlContent) {
       return (
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
@@ -111,7 +152,24 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       );
     }
 
-    if (fileContent?.content) {
+    // Show loading while processing with mammoth
+    if (wordProcessing) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <div className="text-gray-600 dark:text-gray-400">
+              Processing Word document...
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Use backend HTML content if available, otherwise use mammoth-processed content
+    const htmlContent = fileContent?.content || wordHtmlContent;
+
+    if (htmlContent) {
       // Render HTML content from Word document
       return (
         <div className="word-document-container max-h-96 overflow-auto bg-gray-50 dark:bg-gray-900 rounded-lg">
@@ -122,11 +180,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               lineHeight: '1.6',
               color: '#333'
             }}
-            dangerouslySetInnerHTML={{ __html: fileContent.content }}
+            dangerouslySetInnerHTML={{ __html: htmlContent }}
           />
           <div className="mt-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg flex justify-between items-center">
             <span className="text-sm text-gray-600 dark:text-gray-400">
-              Word Document Preview
+              Word Document Preview {!fileContent?.content && wordHtmlContent ? '(Client-side processed)' : ''}
             </span>
             <button
               onClick={() => {
