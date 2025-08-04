@@ -43,7 +43,7 @@ const AdminPage: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Check if user is admin
-  const isAdmin = user?.user_id === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   // Handle navigation back to chat
   const handleBackToChat = () => {
@@ -386,23 +386,25 @@ const AdminPage: React.FC = () => {
                       <li key={user.user_id} className="px-4 py-4 sm:px-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                           <div className="flex items-start sm:items-center space-x-3 flex-1">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-                              user.is_active
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                            }`}>
-                              {user.is_active ? '✅ Active' : '❌ Inactive'}
-                            </span>
+                            <div className="flex flex-col space-y-1 flex-shrink-0">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                user.is_active
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              }`}>
+                                {user.is_active ? '✅ Active' : '❌ Inactive'}
+                              </span>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                user.role === 'admin'
+                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                  : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                              }`}>
+                                {user.role === 'admin' ? '👑 Admin' : '👤 User'}
+                              </span>
+                            </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 space-y-1 sm:space-y-0">
-                                <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                  {user.display_name || user.user_id}
-                                </div>
-                                {user.role === 'admin' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 w-fit">
-                                    👑 Admin
-                                  </span>
-                                )}
+                              <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {user.display_name || user.user_id}
                               </div>
                               <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
                                 ID: {user.user_id}
@@ -424,7 +426,7 @@ const AdminPage: React.FC = () => {
                               className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800 transition-colors"
                               title="Edit User"
                             >
-                              <span className="sm:hidden">✏️</span>
+                              <span className="sm:hidden" >✏️</span>
                               <span className="hidden sm:inline">✏️ Edit</span>
                             </button>
                             <button

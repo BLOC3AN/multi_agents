@@ -125,6 +125,18 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hash_password(password) == password_hash
 
 
+def is_admin_user(user_id: str) -> bool:
+    """Check if a user has admin role."""
+    if not DATABASE_AVAILABLE or not db_config:
+        return False
+
+    user_doc = db_config.users.find_one({"user_id": user_id})
+    if not user_doc:
+        return False
+
+    return user_doc.get("role") == "admin"
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -157,88 +169,69 @@ async def login(request: LoginRequest):
                 detail="User ID and password are required"
             )
         
-        # Find user in database (check both users and admins collections)
+        # Find user in database
         user_doc = db_config.users.find_one({"user_id": request.user_id})
-        admin_doc = db_config.admins.find_one({"admin_id": request.user_id})
 
-        # Determine which type of account this is
-        account_doc = user_doc or admin_doc
-        is_admin = admin_doc is not None
-        account_type = "admin" if is_admin else "user"
-
-        if not account_doc:
-            api_logger.warning(f"🔐 Login attempt for non-existent account: {request.user_id}")
+        if not user_doc:
+            api_logger.warning(f"🔐 Login attempt for non-existent user: {request.user_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid user ID or password"
             )
+
+        # Determine user role
+        user_role = user_doc.get("role", "user")
+        is_admin = user_role == "admin"
         
-        # Check if account is active
-        if not account_doc.get("is_active", True):
-            api_logger.warning(f"🔐 Login attempt for inactive {account_type}: {request.user_id}")
+        # Check if user is active
+        if not user_doc.get("is_active", True):
+            api_logger.warning(f"🔐 Login attempt for inactive user: {request.user_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"{account_type.title()} account is inactive"
+                detail="User account is inactive"
             )
 
         # Verify password
-        stored_password_hash = account_doc.get("password_hash")
+        stored_password_hash = user_doc.get("password_hash")
         if not stored_password_hash:
-            api_logger.error(f"🔐 {account_type.title()} {request.user_id} has no password hash")
+            api_logger.error(f"🔐 User {request.user_id} has no password hash")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"{account_type.title()} account configuration error"
+                detail="User account configuration error"
             )
 
         if not verify_password(request.password, stored_password_hash):
-            api_logger.warning(f"🔐 Invalid password for {account_type}: {request.user_id}")
+            api_logger.warning(f"🔐 Invalid password for user: {request.user_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid user ID or password"
             )
 
-        # Update last login in appropriate collection
-        if is_admin:
-            db_config.admins.update_one(
-                {"admin_id": request.user_id},
-                {"$set": {"last_login": datetime.utcnow()}}
-            )
-        else:
-            db_config.users.update_one(
-                {"user_id": request.user_id},
-                {"$set": {"last_login": datetime.utcnow()}}
-            )
+        # Update last login
+        db_config.users.update_one(
+            {"user_id": request.user_id},
+            {"$set": {"last_login": datetime.utcnow()}}
+        )
         
-        # Prepare account data (exclude sensitive fields)
-        account_id_field = "admin_id" if is_admin else "user_id"
-        account_data = {
-            "user_id": account_doc[account_id_field],  # Keep user_id for compatibility
-            "account_type": account_type,
-            "display_name": account_doc.get("display_name", account_doc[account_id_field]),
-            "email": account_doc.get("email"),
-            "is_active": account_doc.get("is_active", True),
-            "created_at": account_doc.get("created_at"),
+        # Prepare user data (exclude sensitive fields)
+        user_data = {
+            "user_id": user_doc["user_id"],
+            "role": user_role,
+            "display_name": user_doc.get("display_name", user_doc["user_id"]),
+            "email": user_doc.get("email"),
+            "is_active": user_doc.get("is_active", True),
+            "created_at": user_doc.get("created_at"),
             "last_login": datetime.utcnow().isoformat(),
         }
-
-        # Add admin-specific fields if this is an admin
-        if is_admin:
-            account_data.update({
-                "role": account_doc.get("role", "admin"),
-                "can_manage_users": account_doc.get("can_manage_users", True),
-                "can_manage_system": account_doc.get("can_manage_system", True),
-                "can_view_logs": account_doc.get("can_view_logs", True),
-                "permissions": account_doc.get("permissions", {})
-            })
         
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
         api_logger.log_response(200, processing_time, user_id=request.user_id, request_id=f"login_{request.user_id}")
-        api_logger.info(f"✅ Successful login for {account_type}: {request.user_id}")
+        api_logger.info(f"✅ Successful login for {user_role}: {request.user_id}")
 
         return LoginResponse(
             success=True,
-            user=account_data,
-            message=f"Login successful as {account_type}"
+            user=user_data,
+            message=f"Login successful as {user_role}"
         )
         
     except HTTPException:
@@ -305,7 +298,9 @@ async def get_all_users():
                 "is_active": user_doc.get("is_active", True),
                 "created_at": user_doc.get("created_at"),
                 "last_login": user_doc.get("last_login"),
-                "has_password": bool(user_doc.get("password_hash"))
+                "has_password": bool(user_doc.get("password_hash")),
+                "role": user_doc.get("role", "user"),  # Default to "user" if not set
+                "updated_at": user_doc.get("updated_at")
             }
             users.append(user_data)
 
@@ -553,8 +548,8 @@ async def delete_user(user_id: str):
                 detail="User ID is required"
             )
 
-        # Prevent deletion of admin user
-        if user_id == "admin":
+        # Prevent deletion of admin users
+        if user_id == "admin" or is_admin_user(user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot delete admin user"
@@ -568,7 +563,7 @@ async def delete_user(user_id: str):
                 detail="User not found"
             )
 
-        # Check if user has admin role
+        # Check if user has admin role (double check)
         if existing_user.get("role") == "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -648,8 +643,8 @@ async def update_user(user_id: str, request: UserUpdateRequest):
             update_data["email"] = request.email
 
         if request.is_active is not None:
-            # Prevent deactivating admin user
-            if user_id == "admin" and not request.is_active:
+            # Prevent deactivating admin users
+            if (user_id == "admin" or is_admin_user(user_id)) and not request.is_active:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Cannot deactivate admin user"
@@ -665,7 +660,7 @@ async def update_user(user_id: str, request: UserUpdateRequest):
                 )
 
             # Prevent changing admin user role
-            if user_id == "admin" and request.role != "admin":
+            if (user_id == "admin" or is_admin_user(user_id)) and request.role != "admin":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Cannot change admin user role"

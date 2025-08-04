@@ -101,13 +101,6 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="text-center text-sm text-gray-600 dark:text-gray-400">
-            <p>Demo accounts:</p>
-            <p><strong>admin</strong> / admin123</p>
-            <p><strong>user1</strong> / user1123</p>
-            <p><strong>user2</strong> / user2123</p>
-          </div>
-
           <div>
             <button
               type="submit"
