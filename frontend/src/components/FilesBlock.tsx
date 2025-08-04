@@ -18,15 +18,67 @@ interface FilesBlockProps {
   userId: string;
   collapsed?: boolean;
   onExpandSidebar?: () => void;
+  sizes?: {
+    padding: {
+      small: string;
+      medium: string;
+      large: string;
+      xlarge: string;
+    };
+    gap: {
+      small: string;
+      medium: string;
+      large: string;
+    };
+    button: {
+      small: string;
+      medium: string;
+      large: string;
+      xlarge: string;
+      xxlarge: string;
+    };
+    font: {
+      small: string;
+      medium: string;
+    };
+  };
 }
 
-const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collapsed = false, onExpandSidebar }) => {
+const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collapsed = false, onExpandSidebar, sizes }) => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Fallback sizes if not provided (for backward compatibility)
+  const defaultSizes = {
+    padding: {
+      small: '2px',
+      medium: '4px',
+      large: '8px',
+      xlarge: '10px',
+    },
+    gap: {
+      small: '4px',
+      medium: '5px',
+      large: '6px',
+    },
+    button: {
+      small: '8px',
+      medium: '12px',
+      large: '24px',
+      xlarge: '30px',
+      xxlarge: '50px',
+    },
+    font: {
+      small: '8px',
+      medium: '12px',
+    },
+  };
+
+  const sizeValues = sizes || defaultSizes;
   const [previewModal, setPreviewModal] = useState<{isOpen: boolean, fileKey: string, fileName: string}>({
     isOpen: false,
     fileKey: '',
@@ -214,9 +266,9 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
           onClick={() => onExpandSidebar && onExpandSidebar()}
           className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           style={{
-            width: 'calc(100vw / 7 * 0.25)',
-            height: 'calc(100vw / 7 * 0.25)',
-            margin: 'calc(100vw / 7 * 0.01) 0'
+            width: sizeValues.button.xxlarge,
+            height: sizeValues.button.xxlarge,
+            margin: `${sizeValues.padding.small} 0`
           }}
           title={`Files (${files.length}/50) - Click to expand`}
         >
@@ -260,14 +312,14 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
       {/* Files Header */}
       <div
         className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 flex-shrink-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        style={{ padding: 'calc(100vw / 7 * 0.04)' }}
+        style={{ padding: sizeValues.padding.large }}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
-        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
+        <div className="flex items-center" style={{ gap: sizeValues.gap.small }}>
           <svg
             style={{
-              width: 'calc(100vw / 7 * 0.08)',
-              height: 'calc(100vw / 7 * 0.08)'
+              width: sizeValues.font.medium,
+              height: sizeValues.font.medium
             }}
             viewBox="0 0 24 24"
             fill="none"
@@ -282,12 +334,12 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
           </svg>
           <h3
             className="font-medium text-gray-900 dark:text-white"
-            style={{ fontSize: 'calc(100vw / 7 * 0.07)' }}
+            style={{ fontSize: sizeValues.font.medium }}
           >
             Files
           </h3>
         </div>
-        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
+        <div className="flex items-center" style={{ gap: sizeValues.gap.small }}>
           <div
             className={`font-light ${
               files.length >= 45
@@ -296,7 +348,7 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
                 ? 'text-yellow-500 dark:text-yellow-400'
                 : 'text-gray-500 dark:text-gray-400'
             }`}
-            style={{ fontSize: 'calc(100vw / 7 * 0.035)' }}
+            style={{ fontSize: sizeValues.font.small }}
             title={`${files.length} files uploaded, maximum 50 allowed`}
           >
             ({files.length}/50)
@@ -316,13 +368,13 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
                     ? 'opacity-50 cursor-not-allowed'
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
-                style={{ padding: 'calc(100vw / 7 * 0.01)' }}
+                style={{ padding: sizeValues.padding.small }}
                 title={files.length >= 50 ? 'Maximum files reached (50/50)' : 'Upload files'}
               >
                 <svg
                   style={{
-                    width: 'calc(100vw / 7 * 0.07)',
-                    height: 'calc(100vw / 7 * 0.07)'
+                    width: sizeValues.font.medium,
+                    height: sizeValues.font.medium
                   }}
                   viewBox="0 0 24 24"
                   fill="none"
@@ -341,13 +393,13 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
                 }}
                 disabled={loading}
                 className="rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                style={{ padding: 'calc(100vw / 7 * 0.01)' }}
+                style={{ padding: sizeValues.padding.small }}
                 title="Refresh"
               >
                 <svg
                   style={{
-                    width: 'calc(100vw / 7 * 0.07)',
-                    height: 'calc(100vw / 7 * 0.07)'
+                    width: sizeValues.font.medium,
+                    height: sizeValues.font.medium
                   }}
                   viewBox="0 0 24 24"
                   fill="none"
@@ -365,8 +417,8 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
           {/* Collapse/Expand Icon */}
           <svg
             style={{
-              width: 'calc(100vw / 7 * 0.06)',
-              height: 'calc(100vw / 7 * 0.06)'
+              width: sizeValues.font.medium,
+              height: sizeValues.font.medium
             }}
             viewBox="0 0 24 24"
             fill="none"
@@ -396,8 +448,8 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
             }`}
             style={{
-              margin: 'calc(100vw / 7 * 0.02)',
-              padding: 'calc(100vw / 7 * 0.04)'
+              margin: sizeValues.padding.medium,
+              padding: sizeValues.padding.large
             }}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -428,8 +480,8 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
               stroke="currentColor"
               viewBox="0 0 24 24"
               style={{
-                width: 'calc(100vw / 7 * 0.08)',
-                height: 'calc(100vw / 7 * 0.08)'
+                width: sizeValues.font.medium,
+                height: sizeValues.font.medium
               }}
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -448,7 +500,7 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
           {/* Files List */}
           <div
             className="flex-1 overflow-y-auto files-list-scrollbar"
-            style={{ padding: 'calc(100vw / 7 * 0.02)' }}
+            style={{ padding: sizeValues.padding.medium }}
           >
         {loading ? (
           <div className="flex items-center justify-center h-full">
@@ -459,13 +511,13 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
             <div>
               <div
                 className="mb-2"
-                style={{ fontSize: 'calc(100vw / 7 * 0.07)' }}
+                style={{ fontSize: sizeValues.font.medium }}
               >
                 📁 No files yet
               </div>
               <div
                 className="font-light"
-                style={{ fontSize: 'calc(100vw / 7 * 0.05)' }}
+                style={{ fontSize: sizeValues.font.small }}
               >
                 Upload some files to get started (max 50 files)
               </div>

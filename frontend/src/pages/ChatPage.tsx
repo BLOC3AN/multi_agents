@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useChannel } from '../contexts/ChannelContext';
 import { useSocket } from '../hooks/useSocket';
+import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { getUserSessions, getSessionMessages, updateSessionTitle, deleteSession } from '../services/simple-api';
 import MessageRenderer from '../components/MessageRenderer';
 import TypingAnimation from '../components/TypingAnimation';
@@ -13,6 +14,7 @@ import Logo from '../components/Logo';
 const ChatPage: React.FC = () => {
   const { user, logout } = useAuth();
   const { sessions, currentSession, messages, setCurrentSession, ensureActiveSession, addSession, addMessage, setMessages, updateSession, removeSession, clearAll } = useChannel();
+  const { expandedWidthPx, collapsedWidthPx, sizes } = useSidebarWidth();
 
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -449,17 +451,17 @@ const ChatPage: React.FC = () => {
         showMobileSidebar ? 'max-sm:translate-x-0' : 'max-sm:-translate-x-full'
       }`}
       style={{
-        width: sidebarCollapsed ? 'calc(100vw / 7 * 0.3)' : 'calc(100vw / 7)',
-        minWidth: sidebarCollapsed ? 'calc(100vw / 7 * 0.3)' : 'calc(100vw / 7)'
+        width: sidebarCollapsed ? collapsedWidthPx : expandedWidthPx,
+        minWidth: sidebarCollapsed ? collapsedWidthPx : expandedWidthPx
       }}
       >
         {/* Logo Section */}
-        <div className="border-b border-gray-200 dark:border-gray-700" style={{ padding: 'calc(100vw / 7 * 0.04)' }}>
+        <div className="border-b border-gray-200 dark:border-gray-700" style={{ padding: sizes.padding.large }}>
           <div className="flex items-center justify-center">
             <Logo
               size={sidebarCollapsed ? 'large' : 'medium'}
               showText={!sidebarCollapsed}
-              style={{ gap: sidebarCollapsed ? '0' : 'calc(100vw / 7 * 0.02)' }}
+              style={{ gap: sidebarCollapsed ? '0' : sizes.gap.small }}
               onClick={sidebarCollapsed ? () => setSidebarCollapsed(false) : undefined}
             />
           </div>
@@ -473,7 +475,7 @@ const ChatPage: React.FC = () => {
         )}
 
         {/* New Session */}
-        <div className="border-b border-gray-200 dark:border-gray-700" style={{ padding: sidebarCollapsed ? 'calc(100vw / 7 * 0.02)' : 'calc(100vw / 7 * 0.05)' }}>
+        <div className="border-b border-gray-200 dark:border-gray-700" style={{ padding: sidebarCollapsed ? sizes.padding.medium : sizes.padding.xlarge }}>
           {sidebarCollapsed ? (
             /* Collapsed New Session - Just Icon */
             <div className="flex items-center justify-center">
@@ -485,8 +487,8 @@ const ChatPage: React.FC = () => {
                 disabled={!authenticated || isCreatingSession}
                 className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
                 style={{
-                  width: 'calc(100vw / 7 * 0.25)',
-                  height: 'calc(100vw / 7 * 0.25)'
+                  width: sizes.button.xxlarge,
+                  height: sizes.button.xxlarge
                 }}
                 title="Create new session - Click to expand"
               >
@@ -516,15 +518,15 @@ const ChatPage: React.FC = () => {
             </div>
           ) : (
             /* Expanded New Session - Full Input */
-          <div className="flex" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
+          <div className="flex" style={{ gap: sizes.gap.small }}>
             <input
               type="text"
               placeholder="New session..."
               className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               style={{
-                padding: 'calc(100vw / 7 * 0.025) calc(100vw / 7 * 0.03)',
-                fontSize: 'calc(100vw / 7 * 0.04)',
-                minHeight: 'calc(100vw / 7 * 0.12)'
+                padding: `${sizes.gap.medium} ${sizes.gap.large}`,
+                fontSize: sizes.font.small,
+                minHeight: sizes.button.large
               }}
               value={newSessionName}
               onChange={(e) => setNewSessionName(e.target.value)}
@@ -536,18 +538,18 @@ const ChatPage: React.FC = () => {
               disabled={!authenticated || !newSessionName.trim() || isCreatingSession}
               className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               style={{
-                padding: 'calc(100vw / 7 * 0.025)',
-                fontSize: 'calc(100vw / 7 * 0.06)',
-                minWidth: 'calc(100vw / 7 * 0.15)',
-                minHeight: 'calc(100vw / 7 * 0.15)'
+                padding: sizes.gap.medium,
+                fontSize: sizes.font.medium,
+                minWidth: sizes.button.xlarge,
+                minHeight: sizes.button.xlarge
               }}
             >
               {isCreatingSession ? (
                 <div
                   className="animate-spin rounded-full border-2 border-white border-t-transparent"
                   style={{
-                    width: 'calc(100vw / 7 * 0.04)',
-                    height: 'calc(100vw / 7 * 0.04)'
+                    width: sizes.button.small,
+                    height: sizes.button.small
                   }}
                 ></div>
               ) : (
@@ -559,17 +561,18 @@ const ChatPage: React.FC = () => {
         </div>
 
         {/* Files Block - Directly above History Block */}
-        <div style={{ padding: sidebarCollapsed ? 'calc(100vw / 7 * 0.01)' : 'calc(100vw / 7 * 0.02) calc(100vw / 7 * 0.05)' }}>
+        <div style={{ padding: sidebarCollapsed ? sizes.padding.small : `${sizes.padding.medium} ${sizes.padding.xlarge}` }}>
           <FilesBlock
             userId={user?.user_id || ''}
             collapsed={sidebarCollapsed}
             onExpandSidebar={() => setSidebarCollapsed(false)}
+            sizes={sizes}
           />
         </div>
 
         {/* History Block - Directly below Files Block */}
         <div className="history-block-container" style={{
-          padding: sidebarCollapsed ? 'calc(100vw / 7 * 0.01)' : 'calc(100vw / 7 * 0.02) calc(100vw / 7 * 0.05)',
+          padding: sidebarCollapsed ? sizes.padding.small : `${sizes.padding.medium} ${sizes.padding.xlarge}`,
           position: 'relative'
         }}>
           {isLoadingSessions ? (
@@ -597,6 +600,7 @@ const ChatPage: React.FC = () => {
               isSelectingSession={isSelectingSession}
               collapsed={sidebarCollapsed}
               onExpandSidebar={() => setSidebarCollapsed(false)}
+              sizes={sizes}
             />
           )}
         </div>

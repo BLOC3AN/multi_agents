@@ -18,6 +18,30 @@ interface HistoryBlockProps {
   isSelectingSession: boolean;
   collapsed?: boolean;
   onExpandSidebar?: () => void;
+  sizes?: {
+    padding: {
+      small: string;
+      medium: string;
+      large: string;
+      xlarge: string;
+    };
+    gap: {
+      small: string;
+      medium: string;
+      large: string;
+    };
+    button: {
+      small: string;
+      medium: string;
+      large: string;
+      xlarge: string;
+      xxlarge: string;
+    };
+    font: {
+      small: string;
+      medium: string;
+    };
+  };
 }
 
 const HistoryBlock: React.FC<HistoryBlockProps> = ({
@@ -37,12 +61,41 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
   isSelectingSession,
   collapsed = false,
   onExpandSidebar,
+  sizes,
 }) => {
   const [isDropdownHovered, setIsDropdownHovered] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownMenuRef = useRef<HTMLDivElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+
+  // Fallback sizes if not provided (for backward compatibility)
+  const defaultSizes = {
+    padding: {
+      small: '2px',
+      medium: '4px',
+      large: '8px',
+      xlarge: '10px',
+    },
+    gap: {
+      small: '4px',
+      medium: '5px',
+      large: '6px',
+    },
+    button: {
+      small: '8px',
+      medium: '12px',
+      large: '24px',
+      xlarge: '30px',
+      xxlarge: '50px',
+    },
+    font: {
+      small: '8px',
+      medium: '12px',
+    },
+  };
+
+  const sizeValues = sizes || defaultSizes;
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -93,9 +146,9 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
           onClick={() => onExpandSidebar && onExpandSidebar()}
           className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           style={{
-            width: 'calc(100vw / 7 * 0.25)',
-            height: 'calc(100vw / 7 * 0.25)',
-            margin: 'calc(100vw / 7 * 0.01) 0'
+            width: sizeValues.button.xxlarge,
+            height: sizeValues.button.xxlarge,
+            margin: `${sizeValues.padding.small} 0`
           }}
           title={`History (${sessions.length} sessions) - Click to expand`}
         >
@@ -134,14 +187,14 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
       {/* History Header */}
       <div
         className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 flex-shrink-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        style={{ padding: 'calc(100vw / 7 * 0.04)' }}
+        style={{ padding: sizeValues.padding.large }}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
-        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.04)' }}>
+        <div className="flex items-center" style={{ gap: sizeValues.padding.large }}>
           <svg
             style={{
-              width: 'calc(100vw / 7 * 0.08)',
-              height: 'calc(100vw / 7 * 0.08)'
+              width: sizeValues.font.medium,
+              height: sizeValues.font.medium
             }}
             viewBox="0 0 24 24"
             fill="none"
@@ -159,23 +212,23 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
           </svg>
           <h3
             className="font-medium text-gray-900 dark:text-gray-400"
-            style={{ fontSize: 'calc(100vw / 7 * 0.07)' }}
+            style={{ fontSize: sizeValues.font.medium }}
           >
             History
           </h3>
         </div>
-        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
+        <div className="flex items-center" style={{ gap: sizeValues.gap.small }}>
           <div
             className="font-light text-gray-500 dark:text-gray-400"
-            style={{ fontSize: 'calc(100vw / 7 * 0.035)' }}
+            style={{ fontSize: sizeValues.font.small }}
           >
             ({sessions.length})
           </div>
           {/* Collapse/Expand Icon */}
           <svg
             style={{
-              width: 'calc(100vw / 7 * 0.07)',
-              height: 'calc(100vw / 7 * 0.07)'
+              width: sizeValues.font.medium,
+              height: sizeValues.font.medium
             }}
             viewBox="0 0 24 24"
             fill="none"
@@ -210,14 +263,14 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
                 <div className="mb-2">📝 No sessions yet</div>
                 <div
                   className="font-light"
-                  style={{ fontSize: 'calc(100vw / 7 * 0.03)' }}
+                  style={{ fontSize: sizeValues.font.small }}
                 >
                   Create a new session to start chatting
                 </div>
               </div>
             </div>
           ) : (
-            <div style={{ gap: 'calc(100vw / 7 * 0.005)' }} className="flex flex-col">
+            <div style={{ gap: sizeValues.padding.small }} className="flex flex-col">
               {sortedSessions.map((session) => (
                   <div
                     key={session.session_id}
