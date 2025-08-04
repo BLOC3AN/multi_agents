@@ -2,7 +2,21 @@
  * Simple API service for authentication and admin
  */
 import axios from 'axios';
-import type { LoginRequest, LoginResponse, AdminUser, AdminSession, AdminStats, ChatSession, ChatMessage } from '../types';
+import type {
+  LoginRequest,
+  LoginResponse,
+  AdminUser,
+  AdminSession,
+  AdminStats,
+  ChatSession,
+  ChatMessage,
+  UserCreateRequest,
+  UserUpdateRequest,
+  PasswordChangeRequest,
+  UserResponse,
+  UserSessionsResponse,
+  UserMessagesResponse
+} from '../types';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -248,6 +262,205 @@ export async function deleteSession(sessionId: string): Promise<{ success: boole
     return {
       success: false,
       error: error.response?.data?.detail || error.message || 'Failed to delete session',
+    };
+  }
+}
+
+// User Management API functions
+export async function createUser(userData: UserCreateRequest): Promise<UserResponse> {
+  try {
+    console.log('👤 Creating user:', userData.user_id);
+
+    const response = await axios.post(`${API_BASE_URL}/admin/users`, userData, {
+      timeout: 10000,
+    });
+
+    console.log('👤 Create user response:', response.data);
+
+    return {
+      success: true,
+      message: response.data.message,
+      user: response.data.user,
+    };
+
+  } catch (error: any) {
+    console.error('👤 Create user error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to create user',
+    };
+  }
+}
+
+export async function updateUser(userId: string, userData: UserUpdateRequest): Promise<UserResponse> {
+  try {
+    console.log('✏️ Updating user:', userId);
+
+    const response = await axios.patch(`${API_BASE_URL}/admin/users/${userId}`, userData, {
+      timeout: 10000,
+    });
+
+    console.log('✏️ Update user response:', response.data);
+
+    return {
+      success: true,
+      message: response.data.message,
+      user: response.data.user,
+    };
+
+  } catch (error: any) {
+    console.error('✏️ Update user error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to update user',
+    };
+  }
+}
+
+export async function deleteUser(userId: string): Promise<UserResponse> {
+  try {
+    console.log('🗑️ Deleting user:', userId);
+
+    const response = await axios.delete(`${API_BASE_URL}/admin/users/${userId}`, {
+      timeout: 10000,
+    });
+
+    console.log('🗑️ Delete user response:', response.data);
+
+    return {
+      success: true,
+      message: response.data.message,
+    };
+
+  } catch (error: any) {
+    console.error('🗑️ Delete user error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to delete user',
+    };
+  }
+}
+
+export async function changeUserPassword(userId: string, passwordData: PasswordChangeRequest): Promise<UserResponse> {
+  try {
+    console.log('🔑 Changing password for user:', userId);
+
+    const response = await axios.patch(`${API_BASE_URL}/admin/users/${userId}/password`, passwordData, {
+      timeout: 10000,
+    });
+
+    console.log('🔑 Change password response:', response.data);
+
+    return {
+      success: true,
+      message: response.data.message,
+    };
+
+  } catch (error: any) {
+    console.error('🔑 Change password error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to change password',
+    };
+  }
+}
+
+export async function getUserSessionsAdmin(userId: string, limit: number = 50, offset: number = 0): Promise<UserSessionsResponse> {
+  try {
+    console.log('📋 Getting user sessions (admin):', userId);
+
+    const response = await axios.get(`${API_BASE_URL}/admin/users/${userId}/sessions`, {
+      params: { limit, offset },
+      timeout: 10000,
+    });
+
+    console.log('📋 User sessions (admin) response:', response.data);
+
+    return {
+      success: true,
+      sessions: response.data.sessions,
+      total: response.data.total,
+      limit: response.data.limit,
+      offset: response.data.offset,
+      user_id: response.data.user_id,
+    };
+
+  } catch (error: any) {
+    console.error('📋 User sessions (admin) error:', error);
+    return {
+      success: false,
+      sessions: [],
+      total: 0,
+      limit,
+      offset,
+      user_id: userId,
+      error: error.response?.data?.detail || error.message || 'Failed to get user sessions',
+    };
+  }
+}
+
+export async function getUserMessagesAdmin(userId: string, limit: number = 50, offset: number = 0, sessionId?: string): Promise<UserMessagesResponse> {
+  try {
+    console.log('💬 Getting user messages (admin):', userId);
+
+    const params: any = { limit, offset };
+    if (sessionId) {
+      params.session_id = sessionId;
+    }
+
+    const response = await axios.get(`${API_BASE_URL}/admin/users/${userId}/messages`, {
+      params,
+      timeout: 10000,
+    });
+
+    console.log('💬 User messages (admin) response:', response.data);
+
+    return {
+      success: true,
+      messages: response.data.messages,
+      total: response.data.total,
+      limit: response.data.limit,
+      offset: response.data.offset,
+      user_id: response.data.user_id,
+      session_id: response.data.session_id,
+    };
+
+  } catch (error: any) {
+    console.error('💬 User messages (admin) error:', error);
+    return {
+      success: false,
+      messages: [],
+      total: 0,
+      limit,
+      offset,
+      user_id: userId,
+      session_id: sessionId,
+      error: error.response?.data?.detail || error.message || 'Failed to get user messages',
+    };
+  }
+}
+
+export async function getUserCurrentPassword(userId: string): Promise<{ success: boolean; current_password?: string; has_password?: boolean; error?: string }> {
+  try {
+    console.log('🔍 Getting current password for user:', userId);
+
+    const response = await axios.get(`${API_BASE_URL}/admin/users/${userId}/current-password`, {
+      timeout: 10000,
+    });
+
+    console.log('🔍 Current password response:', response.data);
+
+    return {
+      success: true,
+      current_password: response.data.current_password,
+      has_password: response.data.has_password,
+    };
+
+  } catch (error: any) {
+    console.error('🔍 Current password error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to get current password',
     };
   }
 }

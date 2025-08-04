@@ -133,6 +133,8 @@ export interface AdminUser {
   created_at?: string;
   last_login?: string;
   has_password: boolean;
+  role?: UserRole;
+  updated_at?: string;
 }
 
 export interface AdminSession {
@@ -153,4 +155,63 @@ export interface AdminStats {
   total_messages: number;
   recent_sessions_24h: number;
   recent_messages_24h: number;
+}
+
+// User management types
+export type UserRole = 'user' | 'admin';
+
+export interface UserCreateRequest {
+  user_id: string;
+  display_name?: string;
+  email?: string;
+  password: string;
+  is_active?: boolean;
+  role?: UserRole;
+}
+
+export interface UserUpdateRequest {
+  display_name?: string;
+  email?: string;
+  is_active?: boolean;
+  role?: UserRole;
+}
+
+export interface PasswordChangeRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface UserResponse {
+  success: boolean;
+  message?: string;
+  user?: AdminUser;
+  error?: string;
+}
+
+export interface UserHistory {
+  sessions: AdminSession[];
+  messages: ChatMessage[];
+  total_sessions: number;
+  total_messages: number;
+}
+
+export interface UserSessionsResponse {
+  success: boolean;
+  sessions: AdminSession[];
+  total: number;
+  limit: number;
+  offset: number;
+  user_id: string;
+  error?: string;
+}
+
+export interface UserMessagesResponse {
+  success: boolean;
+  messages: ChatMessage[];
+  total: number;
+  limit: number;
+  offset: number;
+  user_id: string;
+  session_id?: string;
+  error?: string;
 }

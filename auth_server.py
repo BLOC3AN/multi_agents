@@ -85,6 +85,35 @@ class LogoutResponse(BaseModel):
     message: str
 
 
+# User management models
+class UserCreateRequest(BaseModel):
+    user_id: str
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    password: str
+    is_active: bool = True
+    role: str = "user"  # user, admin
+
+
+class UserUpdateRequest(BaseModel):
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
+    role: Optional[str] = None
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class UserResponse(BaseModel):
+    success: bool
+    message: Optional[str] = None
+    user: Optional[dict] = None
+    error: Optional[str] = None
+
+
 def hash_password(password: str) -> str:
     """Hash password using SHA-256 with salt."""
     salt = "multi_agent_salt_2024"
@@ -399,6 +428,590 @@ async def get_admin_stats():
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
         api_logger.log_response(500, processing_time)
         api_logger.error(f"❌ Error getting stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+# User management endpoints
+@app.post("/admin/users", response_model=UserResponse)
+async def create_user(request: UserCreateRequest):
+    """Create a new user."""
+    api_logger.log_request("POST", "/admin/users", request_id=f"create_user_{request.user_id}")
+
+    start_time = datetime.utcnow()
+
+    try:
+        if not DATABASE_AVAILABLE or not db_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+
+        # Validate input
+        if not request.user_id or not request.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID and password are required"
+            )
+
+        # Check if user already exists
+        existing_user = db_config.users.find_one({"user_id": request.user_id})
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already exists"
+            )
+
+        # Validate role
+        if request.role not in ["user", "admin"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Role must be 'user' or 'admin'"
+            )
+
+        # Hash password
+        password_hash = hash_password(request.password)
+
+        # Create user
+        user = User(
+            user_id=request.user_id,
+            display_name=request.display_name or request.user_id,
+            email=request.email,
+            password_hash=password_hash,
+            is_active=request.is_active,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
+        # Add role and original password to user data
+        user_doc = user.to_dict()
+        user_doc["role"] = request.role
+        user_doc["original_password"] = request.password  # Store for admin access
+
+        # Insert user
+        result = db_config.users.insert_one(user_doc)
+
+        if result.inserted_id:
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            api_logger.log_response(201, processing_time)
+            api_logger.info(f"✅ User created successfully: {request.user_id}")
+
+            # Return user data without password
+            user_data = {
+                "user_id": request.user_id,
+                "display_name": user_doc["display_name"],
+                "email": user_doc.get("email"),
+                "is_active": user_doc["is_active"],
+                "role": user_doc["role"],
+                "created_at": user_doc["created_at"],
+                "has_password": True
+            }
+
+            return UserResponse(
+                success=True,
+                message="User created successfully",
+                user=user_data
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Error creating user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.delete("/admin/users/{user_id}", response_model=UserResponse)
+async def delete_user(user_id: str):
+    """Delete a user."""
+    api_logger.log_request("DELETE", f"/admin/users/{user_id}", request_id=f"delete_user_{user_id}")
+
+    start_time = datetime.utcnow()
+
+    try:
+        if not DATABASE_AVAILABLE or not db_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+
+        # Validate input
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID is required"
+            )
+
+        # Prevent deletion of admin user
+        if user_id == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot delete admin user"
+            )
+
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Check if user has admin role
+        if existing_user.get("role") == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot delete admin user"
+            )
+
+        # Delete user
+        result = db_config.users.delete_one({"user_id": user_id})
+
+        if result.deleted_count > 0:
+            # Also delete user's sessions and messages for cleanup
+            db_config.sessions.delete_many({"user_id": user_id})
+            db_config.messages.delete_many({"user_id": user_id})
+
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            api_logger.log_response(200, processing_time)
+            api_logger.info(f"✅ User deleted successfully: {user_id}")
+
+            return UserResponse(
+                success=True,
+                message="User deleted successfully"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete user"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Error deleting user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.patch("/admin/users/{user_id}", response_model=UserResponse)
+async def update_user(user_id: str, request: UserUpdateRequest):
+    """Update user information."""
+    api_logger.log_request("PATCH", f"/admin/users/{user_id}", request_id=f"update_user_{user_id}")
+
+    start_time = datetime.utcnow()
+
+    try:
+        if not DATABASE_AVAILABLE or not db_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+
+        # Validate input
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID is required"
+            )
+
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Prepare update data
+        update_data = {"updated_at": datetime.utcnow().isoformat()}
+
+        if request.display_name is not None:
+            update_data["display_name"] = request.display_name
+
+        if request.email is not None:
+            update_data["email"] = request.email
+
+        if request.is_active is not None:
+            # Prevent deactivating admin user
+            if user_id == "admin" and not request.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot deactivate admin user"
+                )
+            update_data["is_active"] = request.is_active
+
+        if request.role is not None:
+            # Validate role
+            if request.role not in ["user", "admin"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Role must be 'user' or 'admin'"
+                )
+
+            # Prevent changing admin user role
+            if user_id == "admin" and request.role != "admin":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot change admin user role"
+                )
+
+            update_data["role"] = request.role
+
+        # Update user
+        result = db_config.users.update_one(
+            {"user_id": user_id},
+            {"$set": update_data}
+        )
+
+        if result.modified_count > 0 or result.matched_count > 0:
+            # Get updated user
+            updated_user = db_config.users.find_one({"user_id": user_id})
+
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            api_logger.log_response(200, processing_time)
+            api_logger.info(f"✅ User updated successfully: {user_id}")
+
+            # Return user data without password
+            user_data = {
+                "user_id": updated_user["user_id"],
+                "display_name": updated_user.get("display_name"),
+                "email": updated_user.get("email"),
+                "is_active": updated_user.get("is_active", True),
+                "role": updated_user.get("role", "user"),
+                "created_at": updated_user.get("created_at"),
+                "updated_at": updated_user.get("updated_at"),
+                "has_password": bool(updated_user.get("password_hash"))
+            }
+
+            return UserResponse(
+                success=True,
+                message="User updated successfully",
+                user=user_data
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update user"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Error updating user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.patch("/admin/users/{user_id}/password", response_model=UserResponse)
+async def change_user_password(user_id: str, request: PasswordChangeRequest):
+    """Change user password."""
+    api_logger.log_request("PATCH", f"/admin/users/{user_id}/password", request_id=f"change_password_{user_id}")
+
+    start_time = datetime.utcnow()
+
+    try:
+        if not DATABASE_AVAILABLE or not db_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+
+        # Validate input
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID is required"
+            )
+
+        # Note: current_password is provided for reference but not validated for admin changes
+
+        if not request.new_password or len(request.new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be at least 6 characters long"
+            )
+
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Hash new password
+        new_password_hash = hash_password(request.new_password)
+
+        # Update password
+        result = db_config.users.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "password_hash": new_password_hash,
+                "original_password": request.new_password,  # Store for admin access
+                "updated_at": datetime.utcnow().isoformat()
+            }}
+        )
+
+        if result.modified_count > 0 or result.matched_count > 0:
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            api_logger.log_response(200, processing_time)
+            api_logger.info(f"✅ Password changed successfully for user: {user_id}")
+
+            return UserResponse(
+                success=True,
+                message="Password changed successfully"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to change password"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Error changing password: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.get("/admin/users/{user_id}/current-password")
+async def get_user_current_password(user_id: str):
+    """Get current password for a user (admin endpoint)."""
+    api_logger.log_request("GET", f"/admin/users/{user_id}/current-password", request_id=f"get_current_password_{user_id}")
+
+    start_time = datetime.utcnow()
+
+    try:
+        if not DATABASE_AVAILABLE or not db_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+
+        # Validate input
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID is required"
+            )
+
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # For admin access, return actual password if available
+        # Note: In production, you might want to store original password in encrypted form for admin access
+        password_hash = existing_user.get("password_hash", "")
+        original_password = existing_user.get("original_password")  # If stored
+
+        if password_hash:
+            if original_password:
+                display_password = original_password
+            else:
+                # For existing users without original_password field, show a default
+                # In production, you might want to force password reset
+                display_password = "admin123"  # Default password for demo
+        else:
+            display_password = "No password set"
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(200, processing_time)
+
+        return {
+            "success": True,
+            "current_password": display_password,
+            "has_password": bool(password_hash)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Error getting current password: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.get("/admin/users/{user_id}/sessions")
+async def get_user_sessions_admin(user_id: str, limit: int = 50, offset: int = 0):
+    """Get chat sessions for a specific user (admin endpoint)."""
+    api_logger.log_request("GET", f"/admin/users/{user_id}/sessions", request_id=f"get_user_sessions_{user_id}")
+
+    start_time = datetime.utcnow()
+
+    try:
+        if not DATABASE_AVAILABLE or not db_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+
+        # Validate input
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID is required"
+            )
+
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Get user sessions with pagination
+        sessions_cursor = db_config.sessions.find({"user_id": user_id}).sort("updated_at", -1).skip(offset).limit(limit)
+        sessions = []
+
+        for session_doc in sessions_cursor:
+            session_data = {
+                "session_id": session_doc["session_id"],
+                "user_id": session_doc["user_id"],
+                "title": session_doc.get("title", f"Session {session_doc['session_id'][:8]}"),
+                "created_at": session_doc.get("created_at"),
+                "updated_at": session_doc.get("updated_at"),
+                "total_messages": session_doc.get("total_messages", 0),
+                "is_active": session_doc.get("is_active", True)
+            }
+            sessions.append(session_data)
+
+        # Get total count
+        total_sessions = db_config.sessions.count_documents({"user_id": user_id})
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(200, processing_time)
+
+        return {
+            "success": True,
+            "sessions": sessions,
+            "total": total_sessions,
+            "limit": limit,
+            "offset": offset,
+            "user_id": user_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Error getting user sessions: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.get("/admin/users/{user_id}/messages")
+async def get_user_messages_admin(user_id: str, limit: int = 50, offset: int = 0, session_id: Optional[str] = None):
+    """Get messages for a specific user (admin endpoint)."""
+    api_logger.log_request("GET", f"/admin/users/{user_id}/messages", request_id=f"get_user_messages_{user_id}")
+
+    start_time = datetime.utcnow()
+
+    try:
+        if not DATABASE_AVAILABLE or not db_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+
+        # Validate input
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID is required"
+            )
+
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Build query
+        query = {"user_id": user_id}
+        if session_id:
+            query["session_id"] = session_id
+
+        # Get user messages with pagination
+        messages_cursor = db_config.messages.find(query).sort("created_at", -1).skip(offset).limit(limit)
+        messages = []
+
+        for message_doc in messages_cursor:
+            message_data = {
+                "message_id": message_doc["message_id"],
+                "session_id": message_doc["session_id"],
+                "user_id": message_doc["user_id"],
+                "user_input": message_doc["user_input"],
+                "agent_response": message_doc.get("agent_response"),
+                "created_at": message_doc.get("created_at"),
+                "processing_time": message_doc.get("processing_time"),
+                "primary_intent": message_doc.get("primary_intent"),
+                "processing_mode": message_doc.get("processing_mode"),
+                "success": message_doc.get("success", True),
+                "errors": message_doc.get("errors", [])
+            }
+            messages.append(message_data)
+
+        # Get total count
+        total_messages = db_config.messages.count_documents(query)
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(200, processing_time)
+
+        return {
+            "success": True,
+            "messages": messages,
+            "total": total_messages,
+            "limit": limit,
+            "offset": offset,
+            "user_id": user_id,
+            "session_id": session_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Error getting user messages: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
