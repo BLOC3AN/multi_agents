@@ -16,6 +16,8 @@ interface HistoryBlockProps {
   setShowDropdown: (sessionId: string | null) => void;
   deletingSessionId: string | null;
   isSelectingSession: boolean;
+  collapsed?: boolean;
+  onExpandSidebar?: () => void;
 }
 
 const HistoryBlock: React.FC<HistoryBlockProps> = ({
@@ -33,6 +35,8 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
   setShowDropdown,
   deletingSessionId,
   isSelectingSession,
+  collapsed = false,
+  onExpandSidebar,
 }) => {
   const [isDropdownHovered, setIsDropdownHovered] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -59,25 +63,63 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
 
 
 
+  if (collapsed) {
+    return (
+      <div className="w-full flex flex-col items-center">
+        {/* Collapsed History Icon Only */}
+        <button
+          onClick={() => onExpandSidebar && onExpandSidebar()}
+          className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          style={{
+            width: 'calc(100vw / 7 * 0.25)',
+            height: 'calc(100vw / 7 * 0.25)',
+            margin: 'calc(100vw / 7 * 0.01) 0'
+          }}
+          title={`History (${sessions.length} sessions) - Click to expand`}
+        >
+          <svg
+            style={{
+              width: '80%',
+              height: '80%'
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="stroke-[2] text-gray-600 dark:text-gray-400"
+          >
+            <path
+              d="M4.4999 3L4.4999 8H9.49988M4.4999 7.99645C5.93133 5.3205 8.75302 3.5 11.9999 3.5C16.6943 3.5 20.4999 7.30558 20.4999 12C20.4999 16.6944 16.6943 20.5 11.9999 20.5C7.6438 20.5 4.05303 17.2232 3.55811 13"
+              stroke="currentColor"
+            />
+            <path
+              d="M15 9L12 12V16"
+              stroke="currentColor"
+            />
+          </svg>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="w-full flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-all duration-200 overflow-hidden"
+      className="w-full flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-all duration-200"
       style={{
-        minHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.2)',
-        maxHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.35)'
+        height: 'calc(100vh * 0.3)', // Fixed height để không bị chạy
+        maxHeight: 'calc(100vh * 0.3)'
       }}
     >
       {/* History Header */}
       <div
         className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 flex-shrink-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        style={{ padding: 'calc(100vw / 7 * 0.03)' }}
+        style={{ padding: 'calc(100vw / 7 * 0.04)' }}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
-        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
+        <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.04)' }}>
           <svg
             style={{
-              width: 'calc(100vw / 7 * 0.065)',
-              height: 'calc(100vw / 7 * 0.065)'
+              width: 'calc(100vw / 7 * 0.08)',
+              height: 'calc(100vw / 7 * 0.08)'
             }}
             viewBox="0 0 24 24"
             fill="none"
@@ -94,8 +136,8 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
             />
           </svg>
           <h3
-            className="font-medium text-gray-900 dark:text-white"
-            style={{ fontSize: 'calc(100vw / 7 * 0.06)' }}
+            className="font-medium text-gray-900 dark:text-gray-400"
+            style={{ fontSize: 'calc(100vw / 7 * 0.07)' }}
           >
             History
           </h3>
@@ -110,8 +152,8 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
           {/* Collapse/Expand Icon */}
           <svg
             style={{
-              width: 'calc(100vw / 7 * 0.06)',
-              height: 'calc(100vw / 7 * 0.06)'
+              width: 'calc(100vw / 7 * 0.07)',
+              height: 'calc(100vw / 7 * 0.07)'
             }}
             viewBox="0 0 24 24"
             fill="none"
@@ -133,8 +175,12 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
       {/* Sessions List Container - Collapsible and Scrollable */}
       {!isCollapsed && (
         <div
-          className="flex-1 overflow-y-auto overflow-x-visible history-sessions-scrollbar"
-          style={{ padding: '0.5px' }}
+          className="overflow-y-auto overflow-x-visible history-sessions-scrollbar"
+          style={{
+            padding: '0.5px',
+            height: 'calc(100vh * 0.25)', // Fixed height cho sessions list
+            minHeight: 'calc(100vh * 0.25)'
+          }}
         >
           {sessions.length === 0 ? (
             <div className="flex items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
@@ -153,12 +199,11 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
               {sortedSessions.map((session) => (
                   <div
                     key={session.session_id}
-                    className={`group rounded-lg transition-colors duration-150 ease-in-out border border-transparent ${
+                    className={`group rounded-lg transition-colors duration-150 ease-in-out border border-transparent px-3 py-2 ${
                       currentSession?.session_id === session.session_id
                         ? 'bg-gray-100/50 dark:bg-gray-700/50 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-600'
                         : 'hover:bg-gray-100/50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-white hover:shadow-sm hover:border-gray-200 dark:hover:border-gray-600'
                     } ${isSelectingSession ? 'pointer-events-none opacity-75' : 'cursor-pointer'}`}
-                    style={{ padding: '0.5px calc(100vw / 7 * 0.03)' }}
                     onClick={(e) => onSessionSelect(session, e)}
                   >
                   <div className="flex items-center justify-between w-full">

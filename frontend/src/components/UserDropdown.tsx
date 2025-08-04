@@ -5,9 +5,11 @@ import { useTheme } from '../contexts/ThemeContext';
 
 interface UserDropdownProps {
   onLogout: () => void;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-const UserDropdown: React.FC<UserDropdownProps> = ({ onLogout }) => {
+const UserDropdown: React.FC<UserDropdownProps> = ({ onLogout, sidebarCollapsed = false, onToggleSidebar }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -63,52 +65,126 @@ const UserDropdown: React.FC<UserDropdownProps> = ({ onLogout }) => {
 
   return (
     <div className="relative user-dropdown-container" ref={dropdownRef}>
-      {/* Avatar Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center w-full hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-        style={{
-          padding: '0.5px',
-          gap: 'calc(100vw / 7 * 0.02)'
-        }}
-      >
-        <div
-          className="bg-blue-600 rounded-full flex items-center justify-center text-white font-medium"
-          style={{
-            width: 'calc(100vw / 7 * 0.1)',
-            height: 'calc(100vw / 7 * 0.1)',
-            fontSize: 'calc(100vw / 7 * 0.045)'
-          }}
-        >
-          {getUserInitial()}
-        </div>
-        <div className="flex-1 min-w-0 text-left">
-          <div
-            className="font-semibold text-gray-900 dark:text-white truncate"
-            style={{ fontSize: 'calc(100vw / 7 * 0.055)' }}
+      {sidebarCollapsed ? (
+        /* Collapsed View - Avatar and Toggle in same row */
+        <div className="flex items-center justify-between" style={{ padding: '3px' }}>
+          {/* Avatar Button */}
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            style={{
+              width: 'calc(100vw / 7 * 0.15)',
+              height: 'calc(100vw / 7 * 0.15)',
+              padding: '2px'
+            }}
+            title={getUserDisplayName()}
           >
-            {getUserDisplayName()}
-          </div>
-          <div
-            className="text-gray-500 dark:text-gray-400"
-            style={{ fontSize: 'calc(100vw / 7 * 0.04)' }}
-          >
-            {user?.user_id === 'admin' ? 'Administrator' : 'User'}
+            <div
+              className="bg-blue-600 rounded-full flex items-center justify-center text-white font-medium"
+              style={{
+                width: '100%',
+                height: '100%',
+                fontSize: 'calc(100vw / 7 * 0.1)'
+              }}
+            >
+              {getUserInitial()}
+            </div>
+          </button>
+
+          {/* Sidebar Toggle Button */}
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-600 dark:text-gray-400"
+              style={{
+                width: 'calc(100vw / 7 * 0.1)',
+                height: 'calc(100vw / 7 * 0.1)'
+              }}
+              title="Expand Sidebar"
+            >
+              <svg
+                style={{
+                  width: '80%',
+                  height: '80%'
+                }}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+        </div>
+      ) : (
+        /* Expanded View - Full User Info */
+        <div style={{ padding: '3px' }}>
+          {/* Avatar and Toggle in same row */}
+          <div className="flex items-center justify-between mb-2">
+            {/* Avatar Button */}
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="flex items-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-1"
+              style={{
+                padding: '0.5px',
+                gap: 'calc(100vw / 7 * 0.05)',
+                marginRight: 'calc(100vw / 7 * 0.01)'
+              }}
+            >
+              <div
+                className="bg-blue-600 rounded-full flex items-center justify-center text-white font-medium"
+                style={{
+                  width: 'calc(100vw / 7 * 0.18)',
+                  height: 'calc(100vw / 7 * 0.18)',
+                  fontSize: 'calc(100vw / 7 * 0.12)'
+                }}
+              >
+                {getUserInitial()}
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <div
+                  className="font-semibold text-gray-900 dark:text-white truncate"
+                  style={{ fontSize: 'calc(100vw / 7 * 0.065)' }}
+                >
+                  {getUserDisplayName()}
+                </div>
+                <div
+                  className="text-gray-500 dark:text-gray-400"
+                  style={{ fontSize: 'calc(100vw / 7 * 0.05)' }}
+                >
+                  {user?.user_id === 'admin' ? 'Administrator' : 'User'}
+                </div>
+              </div>
+            </button>
+
+            {/* Sidebar Toggle Button */}
+            {onToggleSidebar && (
+              <button
+                onClick={onToggleSidebar}
+                className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-600 dark:text-gray-400"
+                style={{
+                  width: 'calc(100vw / 7 * 0.18)',
+                  height: 'calc(100vw / 7 * 0.18)',
+                  padding: '4px'
+                }}
+                title="Collapse Sidebar"
+              >
+                <svg
+                  style={{
+                    width: '80%',
+                    height: '80%'
+                  }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
-        <svg
-          className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          style={{
-            width: 'calc(100vw / 7 * 0.055)',
-            height: 'calc(100vw / 7 * 0.055)'
-          }}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      )}
 
       {/* Dropdown Menu */}
       {isOpen && (

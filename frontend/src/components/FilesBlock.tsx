@@ -16,9 +16,11 @@ interface FileItem {
 interface FilesBlockProps {
   className?: string;
   userId: string;
+  collapsed?: boolean;
+  onExpandSidebar?: () => void;
 }
 
-const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId }) => {
+const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collapsed = false, onExpandSidebar }) => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -204,11 +206,54 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId }) => {
     });
   };
 
+  if (collapsed) {
+    return (
+      <div className={`w-full flex flex-col items-center ${className}`}>
+        {/* Collapsed Files Icon Only */}
+        <button
+          onClick={() => onExpandSidebar && onExpandSidebar()}
+          className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          style={{
+            width: 'calc(100vw / 7 * 0.25)',
+            height: 'calc(100vw / 7 * 0.25)',
+            margin: 'calc(100vw / 7 * 0.01) 0'
+          }}
+          title={`Files (${files.length}/50) - Click to expand`}
+        >
+          <svg
+            style={{
+              width: '80%',
+              height: '80%'
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="stroke-[2] text-gray-600 dark:text-gray-400"
+          >
+            <path
+              d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"
+              stroke="currentColor"
+            />
+            <polyline points="13,2 13,9 20,9" stroke="currentColor" />
+          </svg>
+        </button>
+
+        {/* File Preview Modal */}
+        <FilePreviewModal
+          isOpen={previewModal.isOpen}
+          onClose={closePreviewModal}
+          fileKey={previewModal.fileKey}
+          fileName={previewModal.fileName}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`w-full flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-all duration-200 overflow-hidden ${className}`}
       style={{
-        minHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.2)',
+        minHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.30)',
         maxHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.3)'
       }}
     >
@@ -221,8 +266,8 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId }) => {
         <div className="flex items-center" style={{ gap: 'calc(100vw / 7 * 0.02)' }}>
           <svg
             style={{
-              width: 'calc(100vw / 7 * 0.065)',
-              height: 'calc(100vw / 7 * 0.065)'
+              width: 'calc(100vw / 7 * 0.08)',
+              height: 'calc(100vw / 7 * 0.08)'
             }}
             viewBox="0 0 24 24"
             fill="none"
@@ -237,7 +282,7 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId }) => {
           </svg>
           <h3
             className="font-medium text-gray-900 dark:text-white"
-            style={{ fontSize: 'calc(100vw / 7 * 0.06)' }}
+            style={{ fontSize: 'calc(100vw / 7 * 0.07)' }}
           >
             Files
           </h3>
@@ -276,8 +321,8 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId }) => {
               >
                 <svg
                   style={{
-                    width: 'calc(100vw / 7 * 0.055)',
-                    height: 'calc(100vw / 7 * 0.055)'
+                    width: 'calc(100vw / 7 * 0.07)',
+                    height: 'calc(100vw / 7 * 0.07)'
                   }}
                   viewBox="0 0 24 24"
                   fill="none"
@@ -301,8 +346,8 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId }) => {
               >
                 <svg
                   style={{
-                    width: 'calc(100vw / 7 * 0.055)',
-                    height: 'calc(100vw / 7 * 0.055)'
+                    width: 'calc(100vw / 7 * 0.07)',
+                    height: 'calc(100vw / 7 * 0.07)'
                   }}
                   viewBox="0 0 24 24"
                   fill="none"

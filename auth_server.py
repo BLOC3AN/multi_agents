@@ -10,7 +10,7 @@ from typing import Optional
 import io
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, status, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
@@ -39,15 +39,6 @@ try:
 except ImportError as e:
     S3_AVAILABLE = False
     system_logger.warning(f"⚠️ S3 manager not available: {e}")
-
-# Import File manager
-try:
-    from src.services.file_manager import get_file_manager
-    FILE_MANAGER_AVAILABLE = True
-    system_logger.info("✅ File manager imported successfully")
-except ImportError as e:
-    FILE_MANAGER_AVAILABLE = False
-    system_logger.warning(f"⚠️ File manager not available: {e}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -598,8 +589,8 @@ async def delete_session(session_id: str):
 
 # S3 File Management Endpoints
 @app.post("/api/s3/upload")
-async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
-    """Upload a file to S3 storage with user management."""
+async def upload_file(file: UploadFile = File(...)):
+    """Upload a file to S3 storage."""
     start_time = datetime.utcnow()
 
     if not S3_AVAILABLE:
@@ -609,102 +600,46 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
             detail="S3 service not available"
         )
 
-    if not FILE_MANAGER_AVAILABLE:
-        api_logger.error("❌ File manager not available")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="File management service not available"
-        )
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required"
-        )
-
     try:
-        # Get file manager
-        file_manager = get_file_manager()
-
-        # Check file limit first
-        limit_check = file_manager.check_file_limit(user_id)
-        api_logger.info(f"📁 User {user_id} file count: {limit_check['current_count']}/{limit_check['max_allowed']}")
-
         # Read file content
         file_content = await file.read()
-        file_name = file.filename or "unnamed_file"
-        content_type = file.content_type or "application/octet-stream"
 
         try:
             s3_manager = get_s3_manager()
             file_obj = io.BytesIO(file_content)
 
             # Upload to S3
-            result = s3_manager.upload_file(file_obj, file_name)
+            result = s3_manager.upload_file(file_obj, file.filename or "unnamed_file")
 
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
 
             if result['success']:
-                # Save metadata using file manager
-                file_key = result['file_info']['key']
-                upload_result = file_manager.handle_file_upload(
-                    user_id=user_id,
-                    file_key=file_key,
-                    file_name=file_name,
-                    file_size=len(file_content),
-                    content_type=content_type,
-                    s3_bucket=getattr(s3_manager, 'bucket_name', None)
-                )
-
-                if upload_result['success']:
-                    api_logger.log_response(200, processing_time, user_id=user_id)
-                    api_logger.info(f"✅ File uploaded successfully for user {user_id}: {file_name}")
-                    return JSONResponse(content={
-                        "success": True,
-                        "message": upload_result['message'],
-                        "file_info": result['file_info'],
-                        "file_id": upload_result['file_id'],
-                        "file_count": upload_result['file_count']
-                    })
-                else:
-                    # If metadata save failed, try to cleanup S3 file
-                    try:
-                        s3_manager.delete_file(file_key)
-                    except:
-                        pass
-                    raise Exception(upload_result['error'])
+                api_logger.log_response(200, processing_time)
+                api_logger.info(f"✅ File uploaded successfully: {file.filename}")
+                return JSONResponse(content={
+                    "success": True,
+                    "message": "File uploaded successfully",
+                    "file_info": result['file_info']
+                })
             else:
                 raise Exception(result['error'])
 
         except Exception as s3_error:
             # Fallback - Viettel S3 có vấn đề với SHA256 hash cho upload
-            api_logger.warning(f"⚠️ S3 upload SHA256 issue, simulating success: {str(s3_error)}")
-
-            # Still save metadata for simulated upload
-            file_key = file_name  # Use filename as key for simulated upload
-            upload_result = file_manager.handle_file_upload(
-                user_id=user_id,
-                file_key=file_key,
-                file_name=file_name,
-                file_size=len(file_content),
-                content_type=content_type
-            )
-
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            api_logger.log_response(200, processing_time, user_id=user_id)
+            api_logger.log_response(200, processing_time)
+            api_logger.warning(f"⚠️ S3 upload SHA256 issue, simulating success: {str(s3_error)}")
 
             return JSONResponse(content={
                 "success": True,
                 "message": "File upload simulated (S3 SHA256 hash issue)",
                 "file_info": {
-                    "key": file_key,
-                    "name": file_name,
+                    "key": file.filename,  # Upload vào root bucket
+                    "name": file.filename,
                     "size": len(file_content),
-                    "content_type": content_type,
+                    "content_type": file.content_type or "application/octet-stream",
                     "last_modified": datetime.utcnow().isoformat() + "Z"
                 },
-                "file_id": upload_result.get('file_id') if upload_result['success'] else None,
-                "file_count": upload_result.get('file_count') if upload_result['success'] else None,
                 "note": "S3 upload has SHA256 hash issues - upload simulated"
             })
 
@@ -716,47 +651,36 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
 
 
 @app.get("/api/s3/files")
-async def list_files(user_id: str = None):
-    """List files for a specific user."""
+async def list_files():
+    """List all files in S3 storage."""
     start_time = datetime.utcnow()
 
-    if not FILE_MANAGER_AVAILABLE:
-        api_logger.error("❌ File manager not available")
+    if not S3_AVAILABLE:
+        api_logger.error("❌ S3 manager not available")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="File management service not available"
-        )
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required"
+            detail="S3 service not available"
         )
 
     try:
-        file_manager = get_file_manager()
-        user_files = file_manager.get_user_files(user_id)
-        limit_check = file_manager.check_file_limit(user_id)
+        s3_manager = get_s3_manager()
+        result = s3_manager.list_files()
 
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(200, processing_time, user_id=user_id)
-        api_logger.info(f"✅ Listed {len(user_files)} files for user {user_id}")
 
-        return JSONResponse(content={
-            "success": True,
-            "files": user_files,
-            "total_files": len(user_files),
-            "file_limit": {
-                "current": limit_check['current_count'],
-                "max": limit_check['max_allowed'],
-                "remaining": limit_check['remaining']
-            }
-        })
+        if result['success']:
+            api_logger.log_response(200, processing_time)
+            api_logger.info(f"✅ Listed {len(result.get('files', []))} files")
+            return JSONResponse(content=result)
+        else:
+            api_logger.log_response(500, processing_time)
+            api_logger.error(f"❌ List files failed: {result['error']}")
+            raise HTTPException(status_code=500, detail=result['error'])
 
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(500, processing_time, user_id=user_id)
-        api_logger.error(f"❌ List files error for user {user_id}: {str(e)}")
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ List files error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to list files: {str(e)}")
 
 
@@ -808,59 +732,36 @@ async def download_file(file_key: str):
 
 
 @app.delete("/api/s3/delete/{file_key:path}")
-async def delete_file(file_key: str, user_id: str = None):
-    """Delete a file from S3 storage with user authorization."""
+async def delete_file(file_key: str):
+    """Delete a file from S3 storage."""
     start_time = datetime.utcnow()
 
-    if not FILE_MANAGER_AVAILABLE:
-        api_logger.error("❌ File manager not available")
+    if not S3_AVAILABLE:
+        api_logger.error("❌ S3 manager not available")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="File management service not available"
-        )
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required"
+            detail="S3 service not available"
         )
 
     try:
-        file_manager = get_file_manager()
-
-        # Check if file belongs to user
-        file_metadata = file_manager.get_file_metadata(file_key, user_id)
-        if not file_metadata:
-            api_logger.warning(f"🔒 User {user_id} attempted to delete unauthorized file: {file_key}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="File not found or access denied"
-            )
-
-        # Delete file using file manager (handles both S3 and metadata)
-        success = file_manager.delete_file(file_key, user_id)
+        s3_manager = get_s3_manager()
+        result = s3_manager.delete_file(file_key)
 
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
 
-        if success:
-            api_logger.log_response(200, processing_time, user_id=user_id)
-            api_logger.info(f"✅ File deleted by user {user_id}: {file_key}")
-            return JSONResponse(content={
-                "success": True,
-                "message": "File deleted successfully",
-                "file_key": file_key
-            })
+        if result['success']:
+            api_logger.log_response(200, processing_time)
+            api_logger.info(f"✅ File deleted: {file_key}")
+            return JSONResponse(content=result)
         else:
-            api_logger.log_response(500, processing_time, user_id=user_id)
-            api_logger.error(f"❌ Delete failed for user {user_id}: {file_key}")
-            raise HTTPException(status_code=500, detail="Failed to delete file")
+            api_logger.log_response(500, processing_time)
+            api_logger.error(f"❌ Delete failed: {result['error']}")
+            raise HTTPException(status_code=500, detail=result['error'])
 
-    except HTTPException:
-        raise
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(500, processing_time, user_id=user_id)
-        api_logger.error(f"❌ Delete error for user {user_id}: {str(e)}")
+        api_logger.log_response(500, processing_time)
+        api_logger.error(f"❌ Delete error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 
