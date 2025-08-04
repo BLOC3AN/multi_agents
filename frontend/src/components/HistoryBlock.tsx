@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { ChatSession } from '../types';
 
 interface HistoryBlockProps {
@@ -40,13 +40,29 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
 }) => {
   const [isDropdownHovered, setIsDropdownHovered] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
-  // Auto-close dropdown after 1 second (unless hovered)
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(null);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDropdown, setShowDropdown]);
+
+  // Auto-close dropdown after 5 seconds (unless hovered) - increased time to reduce jumping
   useEffect(() => {
     if (showDropdown && !isDropdownHovered) {
       const timer = setTimeout(() => {
         setShowDropdown(null);
-      }, 1000);
+      }, 5000);
 
       return () => clearTimeout(timer);
     }
@@ -232,10 +248,15 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
                             )}
                           </span>
                         </div>
-                        <div className="relative session-item-container">
+                        <div className="relative session-item-container" ref={dropdownRef}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setDropdownPosition({
+                                top: rect.bottom + 4, // Xổ xuống, cách button 4px
+                                left: rect.right + 4  // Kế bên button, cách 4px
+                              });
                               setShowDropdown(showDropdown === session.session_id ? null : session.session_id);
                             }}
                             className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -250,7 +271,14 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
 
                           {showDropdown === session.session_id && (
                             <div
-                              className="absolute right-0 top-full mt-1 min-w-max w-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 z-[9999] overflow-visible animate-in slide-in-from-top-2 duration-200 session-dropdown"
+                              className="fixed bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-visible session-dropdown"
+                              style={{
+                                zIndex: 10001, // Higher than user-dropdown and sidebar
+                                top: `${dropdownPosition.top}px`,
+                                left: `${dropdownPosition.left}px`,
+                                width: 'calc(100vw / 14)', // 1/2 sidebar width
+                                minWidth: '120px' // Minimum width for readability
+                              }}
                               onMouseEnter={() => setIsDropdownHovered(true)}
                               onMouseLeave={() => setIsDropdownHovered(false)}
                             >
