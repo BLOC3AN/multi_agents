@@ -103,16 +103,13 @@ class TestIntentClassifier:
         self.mock_llm.invoke.return_value = mock_response
 
         state: AgentState = {
-            "input": "solve 2x + 5 = 11",
-            "intent": None,
-            "result": None,
-            "error": None
+            "input": "solve 2x + 5 = 11"
         }
 
         updated_state = self.classifier.classify_state(state)
 
-        assert updated_state["intent"] == "math"
-        assert updated_state["error"] is None
+        assert updated_state["primary_intent"] == "math"
+        assert updated_state["errors"] == []
         assert updated_state["input"] == "solve 2x + 5 = 11"
 
     def test_llm_response_with_extra_text(self):

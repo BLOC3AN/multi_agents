@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Main Multi-Agent System API
   multi-agent-api:
@@ -59,12 +57,12 @@ services:
     depends_on:
       - redis
 
-  # Streamlit GUI
+  # Streamlit GUI (Legacy)
   streamlit-gui:
     build:
       context: ..
       dockerfile: deployment/Dockerfile.gui
-    container_name: multi-agent-gui
+    container_name: multi-agent-gui-legacy
     ports:
       - "8501:8501"
     env_file:
@@ -88,8 +86,40 @@ services:
       - socketio-server
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.multi-agent-gui.rule=Host(`gui.localhost`)"
-      - "traefik.http.services.multi-agent-gui.loadbalancer.server.port=8501"
+      - "traefik.http.routers.multi-agent-gui-legacy.rule=Host(`gui-legacy.localhost`)"
+      - "traefik.http.services.multi-agent-gui-legacy.loadbalancer.server.port=8501"
+
+  # FastAPI + HTMX Web App (New - High Performance)
+  webapp-gui:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.webapp
+    container_name: multi-agent-webapp
+    ports:
+      - "8502:8502"
+    env_file:
+      - ../.env
+    environment:
+      # Only essential Docker-specific variables
+      - PYTHONPATH=/app
+      - SOCKETIO_SERVER_URL=http://multi-agent-socketio:8001
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - multi-agent-network
+    depends_on:
+      - socketio-server
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.multi-agent-webapp.rule=Host(`gui.localhost`)"
+      - "traefik.http.services.multi-agent-webapp.loadbalancer.server.port=8502"
 
   # Redis for caching and session management
   redis:

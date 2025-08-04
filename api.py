@@ -9,14 +9,16 @@ import logging
 from typing import Dict, List, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+import io
 
 from src.config.settings import config
 from graph import create_agent_graph, create_initial_state
 from src.core.types import AgentState, IntentScore, AgentResult
+from src.database.model_s3 import get_s3_manager
 
 
 # Pydantic models for API
@@ -295,6 +297,116 @@ async def get_configuration():
             "confidence_threshold": 0.3
         }
     }
+
+
+# S3 File Management Endpoints
+@app.post("/api/s3/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Upload a file to S3 storage."""
+    try:
+        s3_manager = get_s3_manager()
+
+        # Read file content
+        file_content = await file.read()
+        file_obj = io.BytesIO(file_content)
+
+        # Upload to S3
+        result = s3_manager.upload_file(file_obj, file.filename or "unnamed_file")
+
+        if result['success']:
+            return JSONResponse(content={
+                "success": True,
+                "message": "File uploaded successfully",
+                "file_info": result['file_info']
+            })
+        else:
+            raise HTTPException(status_code=500, detail=result['error'])
+
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@app.get("/api/s3/files")
+async def list_files():
+    """List all files in S3 storage."""
+    try:
+        s3_manager = get_s3_manager()
+        result = s3_manager.list_files()
+
+        if result['success']:
+            return JSONResponse(content=result)
+        else:
+            raise HTTPException(status_code=500, detail=result['error'])
+
+    except Exception as e:
+        logger.error(f"List files error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list files: {str(e)}")
+
+
+@app.get("/api/s3/download/{file_key:path}")
+async def download_file(file_key: str):
+    """Download a file from S3 storage."""
+    try:
+        s3_manager = get_s3_manager()
+        result = s3_manager.download_file(file_key)
+
+        if result['success']:
+            file_data = result['file_data']
+            content_type = result['content_type']
+
+            # Extract filename from file_key
+            filename = file_key.split('/')[-1]
+
+            return StreamingResponse(
+                io.BytesIO(file_data),
+                media_type=content_type,
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+        else:
+            raise HTTPException(status_code=404, detail=result['error'])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Download error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+
+
+@app.delete("/api/s3/delete/{file_key:path}")
+async def delete_file(file_key: str):
+    """Delete a file from S3 storage."""
+    try:
+        s3_manager = get_s3_manager()
+        result = s3_manager.delete_file(file_key)
+
+        if result['success']:
+            return JSONResponse(content=result)
+        else:
+            raise HTTPException(status_code=500, detail=result['error'])
+
+    except Exception as e:
+        logger.error(f"Delete error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+
+@app.get("/api/s3/info/{file_key:path}")
+async def get_file_info(file_key: str):
+    """Get detailed information about a file."""
+    try:
+        s3_manager = get_s3_manager()
+        result = s3_manager.get_file_info(file_key)
+
+        if 'error' not in result:
+            return JSONResponse(content={"success": True, "file_info": result})
+        else:
+            raise HTTPException(status_code=404, detail=result['error'])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get file info error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get file info: {str(e)}")
 
 
 if __name__ == "__main__":

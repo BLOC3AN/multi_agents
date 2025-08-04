@@ -37,7 +37,7 @@ ACTION=${1:-up}
 case $ACTION in
     "up")
         print_status "🚀 Starting Multi-Agent System..."
-        docker compose -f deployment/docker-compose.yml --env-file .env up -d redis socketio-server streamlit-gui
+        docker compose -f deployment/docker-compose.yml --env-file .env up -d redis socketio-server
         
         print_status "⏳ Waiting for services to be ready..."
         sleep 10
@@ -49,14 +49,8 @@ case $ACTION in
             print_error "❌ SocketIO Server failed"
         fi
         
-        if curl -f http://localhost:8501/_stcore/health > /dev/null 2>&1; then
-            print_success "✅ Streamlit GUI: http://localhost:8501"
-        else
-            print_error "❌ Streamlit GUI failed"
-        fi
-        
         print_success "🎉 Multi-Agent System is ready!"
-        print_status "📱 Access GUI: http://localhost:8501"
+        print_status "📱 Access React Frontend: http://localhost:3000 (run 'make up-react' separately)"
         ;;
         
     "down")

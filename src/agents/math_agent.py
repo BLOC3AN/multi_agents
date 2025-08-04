@@ -31,14 +31,4 @@ class MathAgent(BaseAgent):
         return prompt
 
 
-# Legacy function for backward compatibility
-def math_agent(state: AgentState) -> AgentState:
-    """
-    Legacy function for backward compatibility.
-    Use MathAgent class directly for new code.
-    """
-    from src.config.settings import config
 
-    factory = LLMFactory(config.llm)
-    agent = MathAgent(factory)
-    return agent.process(state)
