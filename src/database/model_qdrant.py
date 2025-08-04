@@ -20,6 +20,7 @@ class VectorDocument:
     """Vector document model for Qdrant storage."""
     id: Union[str, int]
     text: str
+    user_id: str  # Required user_id for file isolation
     title: Optional[str] = None
     source: Optional[str] = None
     page: Optional[int] = None
@@ -31,10 +32,9 @@ class VectorDocument:
         """Post-initialization to set default values."""
         if self.timestamp is None:
             self.timestamp = datetime.utcnow().isoformat() + "Z"
-        
+
         if self.metadata is None:
             self.metadata = {
-                "author": None,
                 "category": "document",
                 "language": "vi"
             }
@@ -49,6 +49,7 @@ class VectorDocument:
         """Convert to Qdrant payload format."""
         return {
             "text": self.text,
+            "user_id": self.user_id,
             "title": self.title,
             "source": self.source,
             "page": self.page,
@@ -63,6 +64,7 @@ class VectorDocument:
         return cls(
             id=doc_id,
             text=payload.get("text", ""),
+            user_id=payload.get("user_id", ""),
             title=payload.get("title"),
             source=payload.get("source"),
             page=payload.get("page"),
@@ -130,12 +132,60 @@ class QdrantConfig:
                     }
                 )
                 print(f"✅ Collection created successfully: {self.collection_name}")
+
+                # Create payload indexes for filtering
+                self._create_payload_indexes()
             else:
                 print(f"✅ Collection already exists: {self.collection_name}")
+
+                # Ensure payload indexes exist
+                self._create_payload_indexes()
                 
         except Exception as e:
             print(f"❌ Failed to initialize Qdrant collection: {e}")
             raise
+
+    def _create_payload_indexes(self):
+        """Create payload indexes for efficient filtering."""
+        try:
+            # Create index for user_id field
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="user_id",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            print("✅ Created index for user_id")
+
+            # Create index for title field
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="title",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            print("✅ Created index for title")
+
+            # Create index for source field
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="source",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            print("✅ Created index for source")
+
+            # Create index for metadata.category
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="metadata.category",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            print("✅ Created index for metadata.category")
+
+        except Exception as e:
+            # Indexes might already exist, which is fine
+            if "already exists" in str(e).lower():
+                print("✅ Payload indexes already exist")
+            else:
+                print(f"⚠️ Warning: Failed to create some payload indexes: {e}")
     
     def upsert_document(self, 
                        document: VectorDocument, 
@@ -295,6 +345,151 @@ class QdrantConfig:
             print(f"❌ Failed to get collection info: {e}")
             return None
 
+    def check_file_exists(self, user_id: str, file_name: str, source: str = None) -> Optional[VectorDocument]:
+        """
+        Check if a file has already been embedded for a user.
+
+        Args:
+            user_id: User ID
+            file_name: File name (title)
+            source: Optional source/file_key for more specific matching
+
+        Returns:
+            VectorDocument if exists, None otherwise
+        """
+        try:
+            # Build filter conditions
+            must_conditions = [
+                {
+                    "key": "user_id",
+                    "match": {"value": user_id}
+                },
+                {
+                    "key": "title",
+                    "match": {"value": file_name}
+                }
+            ]
+
+            if source:
+                must_conditions.append({
+                    "key": "source",
+                    "match": {"value": source}
+                })
+
+            filter_conditions = {
+                "must": must_conditions
+            }
+
+            # Use scroll to find points with filter (more efficient than search for existence check)
+            results, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=models.Filter(**filter_conditions),
+                limit=1,
+                with_payload=True,
+                with_vectors=False
+            )
+
+            if results:
+                point = results[0]
+                return VectorDocument.from_payload(point.id, point.payload)
+
+            return None
+
+        except Exception as e:
+            print(f"❌ Failed to check file existence: {e}")
+            return None
+
+    def delete_user_file_vectors(self, user_id: str, file_name: str, source: str = None) -> bool:
+        """
+        Delete all vectors for a specific user file.
+
+        Args:
+            user_id: User ID
+            file_name: File name to delete
+            source: Optional source for more specific matching
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            # Build filter conditions
+            must_conditions = [
+                {
+                    "key": "user_id",
+                    "match": {"value": user_id}
+                },
+                {
+                    "key": "title",
+                    "match": {"value": file_name}
+                }
+            ]
+
+            if source:
+                must_conditions.append({
+                    "key": "source",
+                    "match": {"value": source}
+                })
+
+            filter_conditions = {
+                "must": must_conditions
+            }
+
+            # Delete points with filter
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(
+                    filter=models.Filter(**filter_conditions)
+                )
+            )
+
+            print(f"✅ Deleted vectors for user {user_id}, file: {file_name}")
+            return True
+
+        except Exception as e:
+            print(f"❌ Failed to delete file vectors: {e}")
+            return False
+
+    def get_user_files(self, user_id: str, limit: int = 100) -> List[VectorDocument]:
+        """
+        Get all files for a specific user.
+
+        Args:
+            user_id: User ID
+            limit: Maximum number of files to return
+
+        Returns:
+            List of VectorDocument for the user
+        """
+        try:
+            filter_conditions = {
+                "must": [
+                    {
+                        "key": "user_id",
+                        "match": {"value": user_id}
+                    }
+                ]
+            }
+
+            # Use scroll to get all user files
+            results, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=models.Filter(**filter_conditions),
+                limit=limit,
+                with_payload=True,
+                with_vectors=False
+            )
+
+            user_files = []
+            for point in results:
+                doc = VectorDocument.from_payload(point.id, point.payload)
+                user_files.append(doc)
+
+            return user_files
+
+        except Exception as e:
+            print(f"❌ Failed to get user files: {e}")
+            return []
+
 
 # Global Qdrant configuration instance
 _qdrant_config: Optional[QdrantConfig] = None
@@ -325,11 +520,11 @@ def generate_document_id() -> str:
     return str(uuid.uuid4())
 
 
-def create_vector_document(text: str, 
+def create_vector_document(text: str,
+                          user_id: str,
                           title: str = None,
                           source: str = None,
                           page: int = None,
-                          author: str = None,
                           category: str = "document",
                           language: str = "vi",
                           summary: str = None,
@@ -337,39 +532,39 @@ def create_vector_document(text: str,
                           **kwargs) -> VectorDocument:
     """
     Create a VectorDocument with proper structure.
-    
+
     Args:
         text: Main text content
+        user_id: User ID for file isolation
         title: Document title
         source: Source file or origin
         page: Page number if applicable
-        author: Document author
         category: Document category
         language: Document language
         summary: Document summary
         url: Source URL
         **kwargs: Additional metadata
-        
+
     Returns:
         VectorDocument instance
     """
     doc_id = generate_document_id()
-    
+
     metadata = {
-        "author": author,
         "category": category,
         "language": language,
         **kwargs
     }
-    
+
     extra = {
         "summary": summary,
         "url": url
     }
-    
+
     return VectorDocument(
         id=doc_id,
         text=text,
+        user_id=user_id,
         title=title,
         source=source,
         page=page,

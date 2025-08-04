@@ -26,12 +26,14 @@ class TestVectorDocument:
         doc = VectorDocument(
             id="test_id",
             text="This is a test document",
+            user_id="test_user",
             title="Test Document",
             source="test.txt"
         )
         
         assert doc.id == "test_id"
         assert doc.text == "This is a test document"
+        assert doc.user_id == "test_user"
         assert doc.title == "Test Document"
         assert doc.source == "test.txt"
         assert doc.timestamp is not None
@@ -43,12 +45,14 @@ class TestVectorDocument:
         doc = VectorDocument(
             id="test_id",
             text="Test content",
+            user_id="test_user",
             title="Test Title"
         )
         
         payload = doc.to_payload()
         
         assert payload["text"] == "Test content"
+        assert payload["user_id"] == "test_user"
         assert payload["title"] == "Test Title"
         assert "timestamp" in payload
         assert "metadata" in payload
@@ -58,9 +62,10 @@ class TestVectorDocument:
         """Test creating VectorDocument from payload."""
         payload = {
             "text": "Test content",
+            "user_id": "test_user",
             "title": "Test Title",
             "source": "test.txt",
-            "metadata": {"author": "Test Author"},
+            "metadata": {"category": "test"},
             "extra": {"summary": "Test summary"}
         }
         
@@ -68,9 +73,10 @@ class TestVectorDocument:
         
         assert doc.id == "test_id"
         assert doc.text == "Test content"
+        assert doc.user_id == "test_user"
         assert doc.title == "Test Title"
         assert doc.source == "test.txt"
-        assert doc.metadata["author"] == "Test Author"
+        assert doc.metadata["category"] == "test"
         assert doc.extra["summary"] == "Test summary"
 
 
@@ -112,9 +118,9 @@ class TestQdrantConfig:
             # Create test document
             doc = create_vector_document(
                 text="This is a test document for vector search",
+                user_id="test_user",
                 title="Test Document",
                 source="test_file.txt",
-                author="Test Author",
                 category="test"
             )
             
@@ -175,9 +181,9 @@ class TestUtilityFunctions:
         """Test vector document creation utility."""
         doc = create_vector_document(
             text="Test content",
+            user_id="test_user",
             title="Test Title",
             source="test.txt",
-            author="Test Author",
             category="test",
             language="en",
             summary="Test summary",
@@ -185,9 +191,9 @@ class TestUtilityFunctions:
         )
         
         assert doc.text == "Test content"
+        assert doc.user_id == "test_user"
         assert doc.title == "Test Title"
         assert doc.source == "test.txt"
-        assert doc.metadata["author"] == "Test Author"
         assert doc.metadata["category"] == "test"
         assert doc.metadata["language"] == "en"
         assert doc.extra["summary"] == "Test summary"
@@ -208,9 +214,9 @@ def test_integration_workflow():
         for i in range(3):
             doc = create_vector_document(
                 text=f"This is test document number {i+1} with unique content",
+                user_id="test_user",
                 title=f"Test Document {i+1}",
                 source=f"test_{i+1}.txt",
-                author="Test Author",
                 category="integration_test"
             )
             documents.append(doc)

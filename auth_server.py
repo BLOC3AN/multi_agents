@@ -1468,8 +1468,8 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
                 api_logger.info(f"📤 S3 upload result: {s3_result.get('success', False)}")
 
                 if s3_result['success']:
-                    # Save metadata with FileManager
-                    api_logger.info(f"💾 Saving metadata for user {user_id}")
+                    # Save metadata with FileManager and embed file
+                    api_logger.info(f"💾 Saving metadata and embedding for user {user_id}")
                     file_manager = get_file_manager()
                     upload_result = file_manager.handle_file_upload(
                         user_id=user_id,
@@ -1477,7 +1477,8 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
                         file_name=filename,
                         file_size=file_size,
                         content_type=file.content_type or "application/octet-stream",
-                        s3_bucket=s3_result['file_info'].get('bucket')
+                        s3_bucket=s3_result['file_info'].get('bucket'),
+                        file_content=file_content  # Pass file content for embedding
                     )
                     api_logger.info(f"💾 Metadata saved: {upload_result}")
 
@@ -1489,7 +1490,9 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
                         "message": "File uploaded successfully",
                         "file_info": s3_result['file_info'],
                         "file_id": upload_result.get("file_id"),
-                        "file_count": upload_result.get("file_count", 0)
+                        "file_count": upload_result.get("file_count", 0),
+                        "embedding_id": upload_result.get("embedding_id"),
+                        "embedded": upload_result.get("embedding_id") is not None
                     })
                 else:
                     raise Exception(s3_result['error'])
@@ -1499,7 +1502,7 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
                 processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
                 api_logger.warning(f"⚠️ Upload issue, simulating success for user {user_id}: {str(upload_error)}")
 
-                # Still save metadata even if S3 fails
+                # Still save metadata and embed even if S3 fails
                 if FILE_MANAGER_AVAILABLE:
                     file_manager = get_file_manager()
                     upload_result = file_manager.handle_file_upload(
@@ -1507,7 +1510,8 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
                         file_key=filename,
                         file_name=filename,
                         file_size=file_size,
-                        content_type=file.content_type or "application/octet-stream"
+                        content_type=file.content_type or "application/octet-stream",
+                        file_content=file_content  # Pass file content for embedding
                     )
 
                     return JSONResponse(content={
@@ -1522,6 +1526,8 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
                         },
                         "file_id": upload_result.get("file_id"),
                         "file_count": upload_result.get("file_count", 0),
+                        "embedding_id": upload_result.get("embedding_id"),
+                        "embedded": upload_result.get("embedding_id") is not None,
                         "note": "S3 upload has SHA256 hash issues - upload simulated"
                     })
                 else:
@@ -1710,6 +1716,279 @@ async def delete_file(file_key: str, user_id: str):
         api_logger.log_response(500, processing_time)
         api_logger.error(f"❌ Delete error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+
+@app.post("/api/s3/search")
+async def search_files(request: dict):
+    """Search files using vector similarity."""
+    api_logger.info(f"🌐 POST /api/s3/search")
+    start_time = datetime.utcnow()
+
+    try:
+        user_id = request.get("user_id")
+        query_text = request.get("query", "")
+        limit = request.get("limit", 10)
+
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="user_id is required"
+            )
+
+        if not query_text.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="query text is required"
+            )
+
+        # Try to use file embedding service for search
+        try:
+            from src.services.file_embedding_service import get_file_embedding_service
+            embedding_service = get_file_embedding_service()
+
+            if embedding_service.is_available():
+                # Generate query embedding
+                query_embedding = embedding_service.embedding_provider.encode(query_text)
+
+                # Search in Qdrant
+                qdrant = embedding_service.qdrant
+                search_results = qdrant.search_similar(
+                    query_vector=query_embedding,
+                    limit=limit,
+                    score_threshold=0.3,
+                    filter_conditions={
+                        "must": [
+                            {
+                                "key": "user_id",
+                                "match": {"value": user_id}
+                            }
+                        ]
+                    }
+                )
+
+                # Format results
+                formatted_results = []
+                for result in search_results:
+                    doc = result['document']
+                    formatted_results.append({
+                        "id": doc.id,
+                        "title": doc.title,
+                        "source": doc.source,
+                        "text_preview": doc.text[:200] + "..." if len(doc.text) > 200 else doc.text,
+                        "score": result['score'],
+                        "metadata": doc.metadata,
+                        "timestamp": doc.timestamp
+                    })
+
+                processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                api_logger.info(f"✅ Search completed: {len(formatted_results)} results ({processing_time:.2f}ms)")
+
+                return JSONResponse(content={
+                    "success": True,
+                    "query": query_text,
+                    "results": formatted_results,
+                    "total_results": len(formatted_results),
+                    "search_type": "vector_similarity"
+                })
+            else:
+                raise Exception("Vector search not available")
+
+        except Exception as search_error:
+            api_logger.warning(f"⚠️ Vector search failed: {search_error}")
+
+            # Fallback to text-based search in file metadata
+            if FILE_MANAGER_AVAILABLE:
+                file_manager = get_file_manager()
+                user_files = file_manager.get_user_files(user_id)
+
+                # Simple text matching
+                matching_files = []
+                query_lower = query_text.lower()
+
+                for file_doc in user_files:
+                    if (query_lower in file_doc.get("file_name", "").lower() or
+                        query_lower in file_doc.get("metadata", {}).get("description", "").lower()):
+                        matching_files.append({
+                            "file_id": file_doc["file_id"],
+                            "file_name": file_doc["file_name"],
+                            "file_key": file_doc["file_key"],
+                            "content_type": file_doc["content_type"],
+                            "upload_date": file_doc["upload_date"],
+                            "file_size": file_doc["file_size"],
+                            "search_type": "filename_match"
+                        })
+
+                processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                api_logger.info(f"✅ Fallback search completed: {len(matching_files)} results ({processing_time:.2f}ms)")
+
+                return JSONResponse(content={
+                    "success": True,
+                    "query": query_text,
+                    "results": matching_files,
+                    "total_results": len(matching_files),
+                    "search_type": "filename_match",
+                    "note": "Vector search not available, using filename matching"
+                })
+            else:
+                raise Exception("No search methods available")
+
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Search error: {str(e)} ({processing_time:.2f}ms)")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@app.post("/api/s3/embed-existing")
+async def embed_existing_file(request: dict):
+    """Embed an existing file that wasn't embedded during upload."""
+    api_logger.info(f"🌐 POST /api/s3/embed-existing")
+    start_time = datetime.utcnow()
+
+    try:
+        user_id = request.get("user_id")
+        file_key = request.get("file_key")
+
+        if not user_id or not file_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="user_id and file_key are required"
+            )
+
+        if not FILE_MANAGER_AVAILABLE:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="File management service not available"
+            )
+
+        file_manager = get_file_manager()
+        result = file_manager.embed_existing_file(user_id, file_key)
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+        if result["success"]:
+            api_logger.info(f"✅ File embedded: {file_key} ({processing_time:.2f}ms)")
+        else:
+            api_logger.warning(f"⚠️ Embedding failed: {result.get('error')} ({processing_time:.2f}ms)")
+
+        return JSONResponse(content=result)
+
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Embed existing file error: {str(e)} ({processing_time:.2f}ms)")
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {str(e)}")
+
+
+@app.post("/api/sync/analyze")
+async def analyze_data_sync(request: dict):
+    """Analyze data synchronization status across all storage systems."""
+    api_logger.info(f"🌐 POST /api/sync/analyze")
+    start_time = datetime.utcnow()
+
+    try:
+        user_id = request.get("user_id")  # Optional: analyze specific user
+
+        # Import sync service
+        from src.services.data_sync_service import get_data_sync_service
+        sync_service = get_data_sync_service()
+
+        # Generate sync report
+        report = sync_service.get_sync_report(user_id)
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.info(f"✅ Sync analysis completed ({processing_time:.2f}ms)")
+
+        return JSONResponse(content={
+            "success": True,
+            "report": report
+        })
+
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Sync analysis error: {str(e)} ({processing_time:.2f}ms)")
+        raise HTTPException(status_code=500, detail=f"Sync analysis failed: {str(e)}")
+
+
+@app.post("/api/sync/fix")
+async def fix_data_sync(request: dict):
+    """Fix data synchronization issues."""
+    api_logger.info(f"🌐 POST /api/sync/fix")
+    start_time = datetime.utcnow()
+
+    try:
+        user_id = request.get("user_id")  # Optional: fix specific user
+        dry_run = request.get("dry_run", True)  # Default to dry run for safety
+
+        # Import sync service
+        from src.services.data_sync_service import get_data_sync_service
+        sync_service = get_data_sync_service()
+
+        # Fix sync issues
+        results = sync_service.fix_sync_issues(user_id, dry_run)
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.info(f"✅ Sync fix completed ({processing_time:.2f}ms)")
+
+        return JSONResponse(content={
+            "success": True,
+            "dry_run": dry_run,
+            "results": results
+        })
+
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Sync fix error: {str(e)} ({processing_time:.2f}ms)")
+        raise HTTPException(status_code=500, detail=f"Sync fix failed: {str(e)}")
+
+
+@app.get("/api/sync/status/{user_id}")
+async def get_user_sync_status(user_id: str):
+    """Get sync status for a specific user."""
+    api_logger.info(f"🌐 GET /api/sync/status/{user_id}")
+    start_time = datetime.utcnow()
+
+    try:
+        # Import sync service
+        from src.services.data_sync_service import get_data_sync_service
+        sync_service = get_data_sync_service()
+
+        # Analyze user's files
+        records = sync_service.analyze_file_sync(user_id)
+
+        # Create summary
+        summary = {
+            "user_id": user_id,
+            "total_files": len(records),
+            "synced": len([r for r in records if r.sync_status.value == "synced"]),
+            "issues": len([r for r in records if r.sync_status.value != "synced"]),
+            "files": []
+        }
+
+        # Add file details
+        for record in records:
+            summary["files"].append({
+                "file_name": record.file_name,
+                "file_key": record.file_key,
+                "sync_status": record.sync_status.value,
+                "locations": {
+                    "mongodb": record.in_mongodb,
+                    "s3": record.in_s3,
+                    "qdrant": record.in_qdrant
+                },
+                "issues": record.sync_issues
+            })
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.info(f"✅ User sync status retrieved ({processing_time:.2f}ms)")
+
+        return JSONResponse(content={
+            "success": True,
+            "sync_status": summary
+        })
+
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ User sync status error: {str(e)} ({processing_time:.2f}ms)")
+        raise HTTPException(status_code=500, detail=f"Failed to get sync status: {str(e)}")
 
 
 @app.get("/api/s3/info/{file_key:path}")

@@ -491,6 +491,7 @@ def get_vector_db_info() -> Optional[Dict[str, Any]]:
 
 def store_vector_document(text: str,
                          embedding: List[float],
+                         user_id: str,
                          title: str = None,
                          source: str = None,
                          **kwargs) -> Optional[str]:
@@ -500,6 +501,7 @@ def store_vector_document(text: str,
     Args:
         text: Document text content
         embedding: Vector embedding (1024 dimensions)
+        user_id: User ID for file isolation
         title: Document title
         source: Document source
         **kwargs: Additional metadata
@@ -515,6 +517,7 @@ def store_vector_document(text: str,
         qdrant = get_qdrant_config()
         doc = create_vector_document(
             text=text,
+            user_id=user_id,
             title=title,
             source=source,
             **kwargs

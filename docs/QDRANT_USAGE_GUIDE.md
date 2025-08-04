@@ -280,6 +280,157 @@ print(f"Status: {info['status']}")
 - Track vector storage usage
 - Monitor Qdrant Cloud metrics
 
+## File Upload Integration
+
+### Tự động Embedding khi Upload
+
+Hệ thống đã được tích hợp để tự động embedding files khi upload:
+
+```python
+# File upload với embedding tự động
+upload_result = file_manager.handle_file_upload(
+    user_id="user123",
+    file_key="document.txt",
+    file_name="document.txt",
+    file_size=1024,
+    content_type="text/plain",
+    file_content=file_bytes  # Quan trọng: cần truyền file content
+)
+
+# Kết quả sẽ có thông tin embedding
+if upload_result["success"]:
+    print(f"File uploaded: {upload_result['file_id']}")
+    if upload_result.get("embedding_id"):
+        print(f"File embedded: {upload_result['embedding_id']}")
+```
+
+### Kiểm tra File đã Embedded
+
+```python
+from src.services.file_embedding_service import get_file_embedding_service
+
+embedding_service = get_file_embedding_service()
+is_embedded = embedding_service.check_file_embedded(
+    user_id="user123",
+    filename="document.txt",
+    file_key="documents/document.txt"
+)
+```
+
+### Embedding File đã tồn tại
+
+```python
+# Embed file đã upload trước đó
+result = file_manager.embed_existing_file(
+    user_id="user123",
+    file_key="document.txt"
+)
+```
+
+### Xóa File và Vector
+
+Khi xóa file, vector embedding cũng được xóa tự động:
+
+```python
+# Xóa file sẽ tự động xóa embedding
+success = file_manager.delete_file("document.txt", "user123")
+```
+
+## API Endpoints
+
+### Search Files
+
+```bash
+POST /api/s3/search
+Content-Type: application/json
+
+{
+  "user_id": "user123",
+  "query": "machine learning algorithms",
+  "limit": 10
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "query": "machine learning algorithms",
+  "results": [
+    {
+      "id": "doc_id",
+      "title": "ML Guide.pdf",
+      "source": "files/ml_guide.pdf",
+      "text_preview": "Machine learning is...",
+      "score": 0.85,
+      "metadata": {...},
+      "timestamp": "2025-08-04T10:30:00Z"
+    }
+  ],
+  "total_results": 1,
+  "search_type": "vector_similarity"
+}
+```
+
+### Embed Existing File
+
+```bash
+POST /api/s3/embed-existing
+Content-Type: application/json
+
+{
+  "user_id": "user123",
+  "file_key": "document.txt"
+}
+```
+
+## Supported File Types
+
+Hệ thống tự động embedding các loại file sau:
+
+- **Text files**: `.txt`, `.log`
+- **Markdown**: `.md`, `.markdown`
+- **Code files**: `.py`, `.js`, `.html`, `.css`, `.json`, `.xml`, `.yaml`, `.yml`
+- **Documents**: `.docx` (cần cài `python-docx`)
+- **PDFs**: `.pdf` (cần cài `PyPDF2`)
+
+## Text Extraction
+
+### Plain Text
+```python
+text = TextExtractor.extract_from_text(file_bytes)
+```
+
+### Markdown
+```python
+text = TextExtractor.extract_from_markdown(file_bytes)
+# Tự động loại bỏ markdown formatting
+```
+
+### DOCX
+```python
+text = TextExtractor.extract_from_docx(file_bytes)
+# Cần: pip install python-docx
+```
+
+### PDF
+```python
+text = TextExtractor.extract_from_pdf(file_bytes)
+# Cần: pip install PyPDF2
+```
+
+## Embedding Models
+
+### Sentence Transformers (Recommended)
+```bash
+pip install sentence-transformers
+```
+
+Sử dụng model `all-MiniLM-L6-v2` (384 dimensions, padded to 1024).
+
+### Mock Embeddings (Development)
+Nếu không có sentence-transformers, hệ thống sử dụng mock embeddings dựa trên hash.
+
 ## Tích hợp với Multi-Agent System
 
 Qdrant model được tích hợp sẵn vào hệ thống database chính, có thể sử dụng cùng với MongoDB để:
@@ -288,5 +439,21 @@ Qdrant model được tích hợp sẵn vào hệ thống database chính, có t
 2. **RAG (Retrieval Augmented Generation)**: Cung cấp context cho LLM
 3. **Knowledge Base**: Lưu trữ và truy xuất kiến thức
 4. **Content Recommendation**: Gợi ý nội dung liên quan
+5. **File Management**: Tự động embedding và search files
 
-Hệ thống tự động fallback về MongoDB nếu Qdrant không khả dụng, đảm bảo tính ổn định.
+### Workflow hoàn chỉnh
+
+1. **User upload file** → Frontend gửi file + user_id
+2. **File Manager** → Lưu metadata vào MongoDB + S3
+3. **Embedding Service** → Extract text + tạo embedding
+4. **Qdrant** → Lưu vector với user_id isolation
+5. **Search** → User có thể search semantic trong files của mình
+6. **Delete** → Xóa file cũng xóa vector tương ứng
+
+Hệ thống đảm bảo:
+- ✅ User isolation (mỗi user chỉ thấy files của mình)
+- ✅ Duplicate prevention (không embed lại file đã có)
+- ✅ Automatic cleanup (xóa file = xóa vector)
+- ✅ Fallback support (hoạt động ngay cả khi Qdrant offline)
+- ✅ Multiple file types support
+- ✅ Real-time search với high accuracy

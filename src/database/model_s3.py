@@ -436,6 +436,19 @@ class S3Manager:
                         result['is_docx'] = True  # Special flag for Word
 
                         logger.info(f"Successfully converted Word document to HTML: {file_key}")
+                    except ImportError as e:
+                        logger.warning(f"python-docx not available for Word document {file_key}: {str(e)}")
+                        logger.info("Install python-docx with: pip install python-docx")
+                        # Fallback to base64 for download
+                        try:
+                            import base64
+                            result['content'] = None
+                            result['raw_content'] = base64.b64encode(file_content).decode('utf-8')
+                            result['is_text'] = False
+                            result['is_docx'] = True
+                            result['error'] = "python-docx not available. Install with: pip install python-docx"
+                        except:
+                            result['content'] = None
                     except Exception as e:
                         logger.error(f"Failed to convert Word document {file_key}: {str(e)}")
                         # Fallback to base64 for download
@@ -445,6 +458,7 @@ class S3Manager:
                             result['raw_content'] = base64.b64encode(file_content).decode('utf-8')
                             result['is_text'] = False
                             result['is_docx'] = True
+                            result['error'] = f"Word document processing failed: {str(e)}"
                         except:
                             result['content'] = None
                 elif is_pdf:

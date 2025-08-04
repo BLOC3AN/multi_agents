@@ -50,21 +50,18 @@ def example_basic_operations():
                 "text": "Python là một ngôn ngữ lập trình mạnh mẽ và dễ học",
                 "title": "Giới thiệu Python",
                 "source": "python_tutorial.md",
-                "author": "Lập trình viên",
                 "category": "programming"
             },
             {
                 "text": "Machine Learning là một nhánh của trí tuệ nhân tạo",
                 "title": "Machine Learning cơ bản",
-                "source": "ml_basics.md", 
-                "author": "AI Researcher",
+                "source": "ml_basics.md",
                 "category": "ai"
             },
             {
                 "text": "Vector database giúp tìm kiếm semantic hiệu quả",
                 "title": "Vector Database",
                 "source": "vector_db.md",
-                "author": "Data Engineer", 
                 "category": "database"
             }
         ]
@@ -73,7 +70,7 @@ def example_basic_operations():
         stored_docs = []
         for doc_data in documents:
             # Create vector document
-            doc = create_vector_document(**doc_data)
+            doc = create_vector_document(user_id="demo_user", **doc_data)
             
             # Generate embedding (mock)
             embedding = generate_mock_embedding(doc.text)
@@ -192,6 +189,7 @@ def example_document_management(stored_docs):
         updated_doc = VectorDocument(
             id=doc.id,
             text=doc.text + " (Updated version)",
+            user_id=doc.user_id,
             title=doc.title + " - Updated",
             source=doc.source,
             metadata={**doc.metadata, "version": "2.0"},

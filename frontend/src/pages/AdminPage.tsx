@@ -23,12 +23,13 @@ import EditUserModal from '../components/EditUserModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import UserHistoryModal from '../components/UserHistoryModal';
 import ConfirmationDialog from '../components/ConfirmationDialog';
+import SyncStatusPanel from '../components/SyncStatusPanel';
 import Toast from '../components/Toast';
 
 const AdminPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions' | 'messages' | 'files'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions' | 'messages' | 'files' | 'sync'>('stats');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -681,6 +682,24 @@ const AdminPage: React.FC = () => {
                       </div>
                     </div>
                   </button>
+
+                  <button
+                    onClick={() => setActiveTab('sync')}
+                    className={`bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-left group ${
+                      activeTab === 'sync' ? 'ring-2 ring-blue-500 border-blue-500' : ''
+                    }`}
+                  >
+                    <div className="p-5">
+                      <div className="flex items-center">
+                        <span className="text-2xl mr-3">🔄</span>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Data Sync</p>
+                          <p className="text-lg font-medium text-gray-900 dark:text-white">Monitor</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">Check status →</p>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
                 </div>
               )}
 
@@ -1002,6 +1021,50 @@ const AdminPage: React.FC = () => {
                           </li>
                         ))}
                       </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sync Tab */}
+              {activeTab === 'sync' && (
+                <div className="space-y-6">
+                  <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+                    <div className="px-4 py-5 sm:px-6">
+                      <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                        Data Synchronization Status
+                      </h3>
+                      <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+                        Monitor and manage data consistency across MongoDB, S3, and Qdrant.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Global Sync Status */}
+                  <SyncStatusPanel userId="" className="mb-6" />
+
+                  {/* Per-User Sync Status */}
+                  {users.length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+                      <div className="px-4 py-5 sm:px-6">
+                        <h4 className="text-md leading-6 font-medium text-gray-900 dark:text-white">
+                          User-Specific Sync Status
+                        </h4>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Check sync status for individual users.
+                        </p>
+                      </div>
+                      <div className="border-t border-gray-200 dark:border-gray-700">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+                          {users.slice(0, 6).map((user) => (
+                            <SyncStatusPanel
+                              key={user.user_id}
+                              userId={user.user_id}
+                              className="border border-gray-200 dark:border-gray-600"
+                            />
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
