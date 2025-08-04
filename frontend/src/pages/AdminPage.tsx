@@ -381,8 +381,9 @@ const AdminPage: React.FC = () => {
                       </button>
                     </div>
                   ) : (
-                    <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {users.map((user) => (
+                    <div className="max-h-96 overflow-y-auto admin-list-scroll pr-2">
+                      <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {users.map((user) => (
                       <li key={user.user_id} className="px-4 py-4 sm:px-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                           <div className="flex items-start sm:items-center space-x-3 flex-1">
@@ -458,8 +459,9 @@ const AdminPage: React.FC = () => {
                           </div>
                         </div>
                       </li>
-                      ))}
-                    </ul>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               )}
@@ -472,8 +474,9 @@ const AdminPage: React.FC = () => {
                       Chat Sessions ({sessions.length})
                     </h3>
                   </div>
-                  <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {sessions.map((session) => (
+                  <div className="max-h-96 overflow-y-auto admin-list-scroll pr-2">
+                    <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {sessions.map((session) => (
                       <li key={session.session_id} className="px-4 py-4 sm:px-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
@@ -503,8 +506,9 @@ const AdminPage: React.FC = () => {
                           </div>
                         </div>
                       </li>
-                    ))}
-                  </ul>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               )}
             </>

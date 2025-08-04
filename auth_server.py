@@ -299,10 +299,15 @@ async def get_all_users():
         users = []
 
         for user_doc in users_cursor:
+            # Hide system emails
+            display_email = user_doc.get("email")
+            if display_email and display_email.endswith("@system.local"):
+                display_email = None
+
             user_data = {
                 "user_id": user_doc["user_id"],
                 "display_name": user_doc.get("display_name", user_doc["user_id"]),
-                "email": user_doc.get("email"),
+                "email": display_email,
                 "is_active": user_doc.get("is_active", True),
                 "created_at": user_doc.get("created_at"),
                 "last_login": user_doc.get("last_login"),
@@ -477,11 +482,16 @@ async def create_user(request: UserCreateRequest):
         # Hash password
         password_hash = hash_password(request.password)
 
-        # Create user
+        # Create user (handle empty email)
+        email = request.email.strip() if request.email else None
+        if email == "" or email is None:
+            # Generate unique email based on user_id to avoid duplicate key error
+            email = f"{request.user_id}@system.local"
+
         user = User(
             user_id=request.user_id,
             display_name=request.display_name or request.user_id,
-            email=request.email,
+            email=email,
             password_hash=password_hash,
             is_active=request.is_active,
             created_at=datetime.utcnow(),
@@ -498,14 +508,17 @@ async def create_user(request: UserCreateRequest):
 
         if result.inserted_id:
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            api_logger.log_response(201, processing_time)
-            api_logger.info(f"✅ User created successfully: {request.user_id}")
+            api_logger.info(f"✅ User created successfully: {request.user_id} ({processing_time:.2f}ms)")
 
-            # Return user data without password
+            # Return user data without password (hide system emails)
+            display_email = user_doc.get("email")
+            if display_email and display_email.endswith("@system.local"):
+                display_email = None
+
             user_data = {
                 "user_id": request.user_id,
                 "display_name": user_doc["display_name"],
-                "email": user_doc.get("email"),
+                "email": display_email,
                 "is_active": user_doc["is_active"],
                 "role": user_doc["role"],
                 "created_at": user_doc["created_at"],
@@ -527,8 +540,7 @@ async def create_user(request: UserCreateRequest):
         raise
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(500, processing_time)
-        api_logger.error(f"❌ Error creating user: {e}")
+        api_logger.error(f"❌ Error creating user: {e} ({processing_time:.2f}ms)")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
