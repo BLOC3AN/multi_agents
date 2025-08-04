@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import FilePreviewModal from '../components/FilePreviewModal';
 import {
   getAdminUsers,
   getAdminSessions,
   getAdminStats,
+  getAdminFiles,
+  deleteAdminFile,
   createUser,
   updateUser,
   deleteUser,
@@ -21,16 +24,24 @@ import Toast from '../components/Toast';
 const AdminPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions' | 'files'>('stats');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Data states
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [sessions, setSessions] = useState<AdminSession[]>([]);
+  const [files, setFiles] = useState<any[]>([]);
+  const [fileFilter, setFileFilter] = useState<string>('');
+  const [fileSortBy, setFileSortBy] = useState<'name' | 'size' | 'date' | 'user'>('date');
 
   // Modal states
+  const [previewModal, setPreviewModal] = useState<{isOpen: boolean, fileKey: string, fileName: string}>({
+    isOpen: false,
+    fileKey: '',
+    fileName: ''
+  });
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -62,11 +73,19 @@ const AdminPage: React.FC = () => {
 
     try {
       if (activeTab === 'stats') {
-        const response = await getAdminStats();
-        if (response.success && response.data) {
-          setStats(response.data);
+        const [statsResponse, filesResponse] = await Promise.all([
+          getAdminStats(),
+          getAdminFiles()
+        ]);
+
+        if (statsResponse.success && statsResponse.data) {
+          setStats(statsResponse.data);
         } else {
-          setError(response.error || 'Failed to load stats');
+          setError(statsResponse.error || 'Failed to load stats');
+        }
+
+        if (filesResponse.success && filesResponse.data) {
+          setFiles(filesResponse.data);
         }
       } else if (activeTab === 'users') {
         const response = await getAdminUsers();
@@ -82,6 +101,13 @@ const AdminPage: React.FC = () => {
         } else {
           setError(response.error || 'Failed to load sessions');
         }
+      } else if (activeTab === 'files') {
+        const response = await getAdminFiles();
+        if (response.success && response.data) {
+          setFiles(response.data);
+        } else {
+          setError(response.error || 'Failed to load files');
+        }
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -96,6 +122,116 @@ const AdminPage: React.FC = () => {
       return new Date(dateString).toLocaleString();
     } catch {
       return dateString;
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFileIcon = (contentType: string): string => {
+    if (!contentType) return '📄';
+    if (contentType.startsWith('image/')) return '🖼️';
+    if (contentType.startsWith('video/')) return '🎥';
+    if (contentType.startsWith('audio/')) return '🎵';
+    if (contentType.includes('pdf')) return '📕';
+    if (contentType.includes('word') || contentType.includes('document')) return '📝';
+    if (contentType.includes('excel') || contentType.includes('spreadsheet')) return '📊';
+    if (contentType.includes('powerpoint') || contentType.includes('presentation')) return '📽️';
+    if (contentType.includes('zip') || contentType.includes('archive')) return '📦';
+    if (contentType.includes('text')) return '📄';
+    return '📁';
+  };
+
+  const getFileTypeLabel = (contentType: string): string => {
+    if (!contentType) return 'File';
+    if (contentType.startsWith('image/')) return 'Image';
+    if (contentType.startsWith('video/')) return 'Video';
+    if (contentType.startsWith('audio/')) return 'Audio';
+    if (contentType.includes('pdf')) return 'PDF';
+    if (contentType.includes('word') || contentType.includes('document')) return 'Document';
+    if (contentType.includes('excel') || contentType.includes('spreadsheet')) return 'Spreadsheet';
+    if (contentType.includes('powerpoint') || contentType.includes('presentation')) return 'Presentation';
+    if (contentType.includes('zip') || contentType.includes('archive')) return 'Archive';
+    if (contentType.includes('text')) return 'Text';
+    return contentType.split('/')[0] || 'File';
+  };
+
+  const handleDeleteFile = async (file: any) => {
+    if (!confirm(`Are you sure you want to delete "${file.file_name}" from user ${file.user_id}?`)) {
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await deleteAdminFile(file.file_key, file.user_id);
+      if (response.success) {
+        showToast('File deleted successfully!', 'success');
+        loadData(); // Refresh files list
+      } else {
+        showToast(response.error || 'Failed to delete file', 'error');
+      }
+    } catch (error) {
+      showToast('An unexpected error occurred', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleFilePreview = (file: any) => {
+    setPreviewModal({
+      isOpen: true,
+      fileKey: file.file_key,
+      fileName: file.file_name
+    });
+  };
+
+  const closePreviewModal = () => {
+    setPreviewModal({
+      isOpen: false,
+      fileKey: '',
+      fileName: ''
+    });
+  };
+
+  // Filter and sort files
+  const filteredAndSortedFiles = React.useMemo(() => {
+    let filtered = files;
+
+    // Apply filter
+    if (fileFilter) {
+      filtered = files.filter(file =>
+        file.file_name.toLowerCase().includes(fileFilter.toLowerCase()) ||
+        file.user_id.toLowerCase().includes(fileFilter.toLowerCase()) ||
+        file.content_type.toLowerCase().includes(fileFilter.toLowerCase())
+      );
+    }
+
+    // Apply sorting
+    return filtered.sort((a, b) => {
+      switch (fileSortBy) {
+        case 'name':
+          return a.file_name.localeCompare(b.file_name);
+        case 'size':
+          return b.file_size - a.file_size;
+        case 'user':
+          return a.user_id.localeCompare(b.user_id);
+        case 'date':
+        default:
+          return new Date(b.upload_date).getTime() - new Date(a.upload_date).getTime();
+      }
+    });
+  }, [files, fileFilter, fileSortBy]);
+
+  // Handle navigation from stats cards
+  const handleStatsNavigation = (tab: 'users' | 'sessions' | 'files') => {
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+      // Data will be loaded automatically by useEffect
     }
   };
 
@@ -259,6 +395,7 @@ const AdminPage: React.FC = () => {
               { id: 'stats', label: '📊 Statistics' },
               { id: 'users', label: '👥 Users' },
               { id: 'sessions', label: '💬 Sessions' },
+              { id: 'files', label: '📁 Files' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -302,29 +439,41 @@ const AdminPage: React.FC = () => {
               {/* Statistics Tab */}
               {activeTab === 'stats' && stats && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                  <button
+                    onClick={() => handleStatsNavigation('users')}
+                    className={`bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-left group ${
+                      activeTab === 'users' ? 'ring-2 ring-blue-500 border-blue-500' : ''
+                    }`}
+                  >
                     <div className="p-5">
                       <div className="flex items-center">
                         <span className="text-2xl mr-3">👥</span>
                         <div>
                           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</p>
                           <p className="text-lg font-medium text-gray-900 dark:text-white">{stats.total_users}</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">Click to view →</p>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
 
-                  <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                  <button
+                    onClick={() => handleStatsNavigation('sessions')}
+                    className={`bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-left group ${
+                      activeTab === 'sessions' ? 'ring-2 ring-blue-500 border-blue-500' : ''
+                    }`}
+                  >
                     <div className="p-5">
                       <div className="flex items-center">
                         <span className="text-2xl mr-3">💬</span>
                         <div>
                           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Sessions</p>
                           <p className="text-lg font-medium text-gray-900 dark:text-white">{stats.total_sessions}</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">Click to view →</p>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
                     <div className="p-5">
@@ -338,17 +487,38 @@ const AdminPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                  <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg border-l-4 border-orange-500">
                     <div className="p-5">
                       <div className="flex items-center">
                         <span className="text-2xl mr-3">🔥</span>
                         <div>
                           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Recent (24h)</p>
                           <p className="text-lg font-medium text-gray-900 dark:text-white">{stats.recent_sessions_24h}</p>
+                          <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">Live metric</p>
                         </div>
                       </div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleStatsNavigation('files')}
+                    className={`bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-left group ${
+                      activeTab === 'files' ? 'ring-2 ring-blue-500 border-blue-500' : ''
+                    }`}
+                  >
+                    <div className="p-5">
+                      <div className="flex items-center">
+                        <span className="text-2xl mr-3">📁</span>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Files</p>
+                          <p className="text-lg font-medium text-gray-900 dark:text-white">{files.length}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            {formatFileSize(files.reduce((sum, file) => sum + file.file_size, 0))}
+                          </p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">Click to view →</p>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
                 </div>
               )}
 
@@ -511,6 +681,105 @@ const AdminPage: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Files Tab */}
+              {activeTab === 'files' && (
+                <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+                  <div className="px-4 py-5 sm:px-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                        Files ({filteredAndSortedFiles.length} of {files.length})
+                      </h3>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Total Size: {formatFileSize(files.reduce((sum, file) => sum + file.file_size, 0))}
+                      </div>
+                    </div>
+
+                    {/* Filter and Sort Controls */}
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          placeholder="Search files, users, or types..."
+                          value={fileFilter}
+                          onChange={(e) => setFileFilter(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                        />
+                      </div>
+                      <div>
+                        <select
+                          value={fileSortBy}
+                          onChange={(e) => setFileSortBy(e.target.value as 'name' | 'size' | 'date' | 'user')}
+                          className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        >
+                          <option value="date">Sort by Date</option>
+                          <option value="name">Sort by Name</option>
+                          <option value="size">Sort by Size</option>
+                          <option value="user">Sort by User</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  {files.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="text-6xl mb-4">📁</div>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No files found</h3>
+                      <p className="text-gray-500 dark:text-gray-400">Files uploaded by users will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-96 overflow-y-auto admin-list-scroll pr-2">
+                      <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {files.map((file) => (
+                        <li key={file.file_id} className="px-4 py-4 sm:px-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="flex-shrink-0">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                  {getFileIcon(file.content_type)} {getFileTypeLabel(file.content_type)}
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <button
+                                  onClick={() => handleFilePreview(file)}
+                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 truncate text-left transition-colors"
+                                  title="Click to preview file"
+                                >
+                                  {file.file_name}
+                                </button>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  User: <span className="font-medium">{file.user_id}</span> | Size: {formatFileSize(file.file_size)}
+                                </div>
+                                <div className="text-xs text-gray-400 dark:text-gray-500">
+                                  Uploaded: {formatDate(file.upload_date)} | Type: {file.content_type}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleFilePreview(file)}
+                                className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800 transition-colors"
+                                title="Preview File"
+                              >
+                                <span className="sm:hidden">👁️</span>
+                                <span className="hidden sm:inline">Preview</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteFile(file)}
+                                className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors"
+                                title="Delete File"
+                              >
+                                <span className="sm:hidden">🗑️</span>
+                                <span className="hidden sm:inline">Delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -566,6 +835,14 @@ const AdminPage: React.FC = () => {
           onClose={() => setToast(null)}
         />
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        isOpen={previewModal.isOpen}
+        onClose={closePreviewModal}
+        fileKey={previewModal.fileKey}
+        fileName={previewModal.fileName}
+      />
     </div>
   );
 };

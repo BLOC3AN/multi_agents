@@ -172,7 +172,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     if (htmlContent) {
       // Render HTML content from Word document
       return (
-        <div className="word-document-container max-h-96 overflow-auto bg-gray-50 dark:bg-gray-900 rounded-lg">
+        <div className="word-document-container overflow-auto bg-gray-50 dark:bg-gray-900 rounded-lg">
           <div
             className="word-document bg-white dark:bg-gray-800 p-8 m-4 rounded-lg shadow-lg prose prose-lg max-w-none"
             style={{
@@ -323,7 +323,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     }
 
     return (
-      <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 max-h-96 overflow-auto">
+      <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 overflow-auto">
         <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono">
           {fileContent.content}
         </pre>
@@ -363,7 +363,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <img
             src={`data:${fileContent.content_type};base64,${fileContent.content}`}
             alt={fileName}
-            className="max-w-full max-h-96 object-contain rounded"
+            className="max-w-full object-contain rounded"
           />
         </div>
       );
@@ -488,7 +488,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           </div>
 
           {/* Content */}
-          <div className="max-h-[70vh] overflow-auto">
+          <div className="max-h-[80vh] overflow-auto">
             {renderContent()}
           </div>
         </div>

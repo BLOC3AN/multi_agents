@@ -464,3 +464,52 @@ export async function getUserCurrentPassword(userId: string): Promise<{ success:
     };
   }
 }
+
+// Admin Files API
+export async function getAdminFiles(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+  try {
+    console.log('📁 Getting all files (admin)');
+
+    const response = await axios.get(`${API_BASE_URL}/admin/files`, {
+      timeout: 10000,
+    });
+
+    console.log('📁 Admin files response:', response.data);
+
+    return {
+      success: true,
+      data: response.data.files || [],
+    };
+
+  } catch (error: any) {
+    console.error('📁 Admin files error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to get files',
+    };
+  }
+}
+
+export async function deleteAdminFile(fileKey: string, userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('🗑️ Deleting file (admin):', fileKey, 'for user:', userId);
+
+    const response = await axios.delete(`${API_BASE_URL}/admin/files/${encodeURIComponent(fileKey)}`, {
+      params: { user_id: userId },
+      timeout: 10000,
+    });
+
+    console.log('🗑️ Admin delete file response:', response.data);
+
+    return {
+      success: true,
+    };
+
+  } catch (error: any) {
+    console.error('🗑️ Admin delete file error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to delete file',
+    };
+  }
+}

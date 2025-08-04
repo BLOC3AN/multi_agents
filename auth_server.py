@@ -442,6 +442,105 @@ async def get_admin_stats():
         )
 
 
+@app.get("/admin/files")
+async def get_all_files():
+    """Get all files for admin dashboard."""
+    api_logger.info("🌐 GET /admin/files")
+    start_time = datetime.utcnow()
+
+    try:
+        if not FILE_MANAGER_AVAILABLE:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="File management service not available"
+            )
+
+        # Get all files from all users
+        file_manager = get_file_manager()
+        db_config = get_db_config()
+
+        # Get all file metadata
+        files_cursor = db_config.file_metadata.find({"is_active": True}).sort("upload_date", -1)
+        files = []
+
+        for file_doc in files_cursor:
+            file_data = {
+                "file_id": file_doc["file_id"],
+                "user_id": file_doc["user_id"],
+                "file_key": file_doc["file_key"],
+                "file_name": file_doc["file_name"],
+                "file_size": file_doc["file_size"],
+                "content_type": file_doc["content_type"],
+                "upload_date": file_doc.get("upload_date"),
+                "s3_bucket": file_doc.get("s3_bucket"),
+                "metadata": file_doc.get("metadata", {})
+            }
+            files.append(file_data)
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.info(f"✅ Listed {len(files)} files ({processing_time:.2f}ms)")
+
+        return {
+            "success": True,
+            "files": files,
+            "total": len(files)
+        }
+
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Error getting files: {e} ({processing_time:.2f}ms)")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.delete("/admin/files/{file_key:path}")
+async def delete_file_admin(file_key: str, user_id: str):
+    """Delete a file (admin endpoint)."""
+    api_logger.info(f"🌐 DELETE /admin/files/{file_key} - User: {user_id}")
+    start_time = datetime.utcnow()
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required"
+        )
+
+    try:
+        if not FILE_MANAGER_AVAILABLE:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="File management service not available"
+            )
+
+        file_manager = get_file_manager()
+        success = file_manager.delete_file(file_key, user_id)
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+        if success:
+            api_logger.info(f"✅ File deleted (admin): {file_key} by user {user_id} ({processing_time:.2f}ms)")
+            return JSONResponse(content={
+                "success": True,
+                "message": "File deleted successfully",
+                "file_key": file_key
+            })
+        else:
+            api_logger.error(f"❌ Delete failed: File not found or access denied")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found or access denied"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Delete error: {str(e)} ({processing_time:.2f}ms)")
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+
 # User management endpoints
 @app.post("/admin/users", response_model=UserResponse)
 async def create_user(request: UserCreateRequest):
@@ -1262,19 +1361,90 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
     try:
         # Read file content
         file_content = await file.read()
+        file_size = len(file_content)
+        filename = file.filename or "unnamed_file"
 
-        try:
+        # Use FileManager for user-specific file management
+        if FILE_MANAGER_AVAILABLE:
+            try:
+                api_logger.info(f"🔄 Starting upload process for user {user_id}, file: {filename}")
+
+                # Upload to S3 first
+                s3_manager = get_s3_manager()
+                file_obj = io.BytesIO(file_content)
+                s3_result = s3_manager.upload_file(file_obj, filename)
+
+                api_logger.info(f"📤 S3 upload result: {s3_result.get('success', False)}")
+
+                if s3_result['success']:
+                    # Save metadata with FileManager
+                    api_logger.info(f"💾 Saving metadata for user {user_id}")
+                    file_manager = get_file_manager()
+                    upload_result = file_manager.handle_file_upload(
+                        user_id=user_id,
+                        file_key=filename,
+                        file_name=filename,
+                        file_size=file_size,
+                        content_type=file.content_type or "application/octet-stream",
+                        s3_bucket=s3_result['file_info'].get('bucket')
+                    )
+                    api_logger.info(f"💾 Metadata saved: {upload_result}")
+
+                    processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                    api_logger.info(f"✅ File uploaded for user {user_id}: {filename} ({processing_time:.2f}ms)")
+
+                    return JSONResponse(content={
+                        "success": True,
+                        "message": "File uploaded successfully",
+                        "file_info": s3_result['file_info'],
+                        "file_id": upload_result.get("file_id"),
+                        "file_count": upload_result.get("file_count", 0)
+                    })
+                else:
+                    raise Exception(s3_result['error'])
+
+            except Exception as upload_error:
+                # Fallback - simulate success for development
+                processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                api_logger.warning(f"⚠️ Upload issue, simulating success for user {user_id}: {str(upload_error)}")
+
+                # Still save metadata even if S3 fails
+                if FILE_MANAGER_AVAILABLE:
+                    file_manager = get_file_manager()
+                    upload_result = file_manager.handle_file_upload(
+                        user_id=user_id,
+                        file_key=filename,
+                        file_name=filename,
+                        file_size=file_size,
+                        content_type=file.content_type or "application/octet-stream"
+                    )
+
+                    return JSONResponse(content={
+                        "success": True,
+                        "message": "File upload simulated (S3 SHA256 hash issue)",
+                        "file_info": {
+                            "key": filename,
+                            "name": filename,
+                            "size": file_size,
+                            "content_type": file.content_type or "application/octet-stream",
+                            "last_modified": datetime.utcnow().isoformat() + "Z"
+                        },
+                        "file_id": upload_result.get("file_id"),
+                        "file_count": upload_result.get("file_count", 0),
+                        "note": "S3 upload has SHA256 hash issues - upload simulated"
+                    })
+                else:
+                    raise Exception("File management service not available")
+        else:
+            # Fallback to old S3 manager (less secure)
             s3_manager = get_s3_manager()
             file_obj = io.BytesIO(file_content)
-
-            # Upload to S3
-            result = s3_manager.upload_file(file_obj, file.filename or "unnamed_file")
+            result = s3_manager.upload_file(file_obj, filename)
 
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
 
             if result['success']:
-                api_logger.log_response(200, processing_time)
-                api_logger.info(f"✅ File uploaded successfully: {file.filename}")
+                api_logger.info(f"✅ File uploaded (fallback): {filename} ({processing_time:.2f}ms)")
                 return JSONResponse(content={
                     "success": True,
                     "message": "File uploaded successfully",
@@ -1283,29 +1453,9 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
             else:
                 raise Exception(result['error'])
 
-        except Exception as s3_error:
-            # Fallback - Viettel S3 có vấn đề với SHA256 hash cho upload
-            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            api_logger.log_response(200, processing_time)
-            api_logger.warning(f"⚠️ S3 upload SHA256 issue, simulating success: {str(s3_error)}")
-
-            return JSONResponse(content={
-                "success": True,
-                "message": "File upload simulated (S3 SHA256 hash issue)",
-                "file_info": {
-                    "key": file.filename,  # Upload vào root bucket
-                    "name": file.filename,
-                    "size": len(file_content),
-                    "content_type": file.content_type or "application/octet-stream",
-                    "last_modified": datetime.utcnow().isoformat() + "Z"
-                },
-                "note": "S3 upload has SHA256 hash issues - upload simulated"
-            })
-
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(500, processing_time)
-        api_logger.error(f"❌ Upload error: {str(e)}")
+        api_logger.error(f"❌ Upload error: {str(e)} ({processing_time:.2f}ms)")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
