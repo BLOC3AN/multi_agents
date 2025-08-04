@@ -10,7 +10,7 @@ from typing import Optional
 import io
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, status, UploadFile, File
+from fastapi import FastAPI, HTTPException, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
@@ -39,6 +39,15 @@ try:
 except ImportError as e:
     S3_AVAILABLE = False
     system_logger.warning(f"⚠️ S3 manager not available: {e}")
+
+# Import File Manager
+try:
+    from src.services.file_manager import get_file_manager
+    FILE_MANAGER_AVAILABLE = True
+    system_logger.info("✅ File manager imported successfully")
+except ImportError as e:
+    FILE_MANAGER_AVAILABLE = False
+    system_logger.warning(f"⚠️ File manager not available: {e}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -151,7 +160,7 @@ async def health_check():
 @app.post("/auth/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """Authenticate user with user_id and password."""
-    api_logger.log_request("POST", "/auth/login", request_id=f"login_{request.user_id}")
+    api_logger.info(f"🌐 POST /auth/login - User: {request.user_id}")
     
     start_time = datetime.utcnow()
     
@@ -225,8 +234,7 @@ async def login(request: LoginRequest):
         }
         
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(200, processing_time, user_id=request.user_id, request_id=f"login_{request.user_id}")
-        api_logger.info(f"✅ Successful login for {user_role}: {request.user_id}")
+        api_logger.info(f"✅ Successful login for {user_role}: {request.user_id} ({processing_time:.2f}ms)")
 
         return LoginResponse(
             success=True,
@@ -236,11 +244,11 @@ async def login(request: LoginRequest):
         
     except HTTPException:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(401, processing_time, user_id=request.user_id, request_id=f"login_{request.user_id}")
+        api_logger.info(f"❌ Response 401 ({processing_time:.2f}ms)")
         raise
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(500, processing_time, user_id=request.user_id, request_id=f"login_{request.user_id}")
+        api_logger.error(f"❌ Response 500 ({processing_time:.2f}ms)")
         api_logger.error(f"❌ Login error for user {request.user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -251,8 +259,8 @@ async def login(request: LoginRequest):
 @app.post("/auth/logout", response_model=LogoutResponse)
 async def logout():
     """Logout user (placeholder for future session management)."""
-    api_logger.log_request("POST", "/auth/logout")
-    
+    api_logger.info("🌐 POST /auth/logout")
+
     # For now, just return success
     # In the future, this could invalidate tokens/sessions
     
@@ -275,7 +283,7 @@ async def get_current_user():
 @app.get("/admin/users")
 async def get_all_users():
     """Get all users for admin dashboard."""
-    api_logger.log_request("GET", "/admin/users")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -326,7 +334,7 @@ async def get_all_users():
 @app.get("/admin/sessions")
 async def get_all_sessions():
     """Get all chat sessions for admin dashboard."""
-    api_logger.log_request("GET", "/admin/sessions")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -375,7 +383,7 @@ async def get_all_sessions():
 @app.get("/admin/stats")
 async def get_admin_stats():
     """Get admin dashboard statistics."""
-    api_logger.log_request("GET", "/admin/stats")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -433,7 +441,7 @@ async def get_admin_stats():
 @app.post("/admin/users", response_model=UserResponse)
 async def create_user(request: UserCreateRequest):
     """Create a new user."""
-    api_logger.log_request("POST", "/admin/users", request_id=f"create_user_{request.user_id}")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -530,7 +538,7 @@ async def create_user(request: UserCreateRequest):
 @app.delete("/admin/users/{user_id}", response_model=UserResponse)
 async def delete_user(user_id: str):
     """Delete a user."""
-    api_logger.log_request("DELETE", f"/admin/users/{user_id}", request_id=f"delete_user_{user_id}")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -607,7 +615,7 @@ async def delete_user(user_id: str):
 @app.patch("/admin/users/{user_id}", response_model=UserResponse)
 async def update_user(user_id: str, request: UserUpdateRequest):
     """Update user information."""
-    api_logger.log_request("PATCH", f"/admin/users/{user_id}", request_id=f"update_user_{user_id}")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -720,7 +728,7 @@ async def update_user(user_id: str, request: UserUpdateRequest):
 @app.patch("/admin/users/{user_id}/password", response_model=UserResponse)
 async def change_user_password(user_id: str, request: PasswordChangeRequest):
     """Change user password."""
-    api_logger.log_request("PATCH", f"/admin/users/{user_id}/password", request_id=f"change_password_{user_id}")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -797,7 +805,7 @@ async def change_user_password(user_id: str, request: PasswordChangeRequest):
 @app.get("/admin/users/{user_id}/current-password")
 async def get_user_current_password(user_id: str):
     """Get current password for a user (admin endpoint)."""
-    api_logger.log_request("GET", f"/admin/users/{user_id}/current-password", request_id=f"get_current_password_{user_id}")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -862,7 +870,7 @@ async def get_user_current_password(user_id: str):
 @app.get("/admin/users/{user_id}/sessions")
 async def get_user_sessions_admin(user_id: str, limit: int = 50, offset: int = 0):
     """Get chat sessions for a specific user (admin endpoint)."""
-    api_logger.log_request("GET", f"/admin/users/{user_id}/sessions", request_id=f"get_user_sessions_{user_id}")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -934,7 +942,7 @@ async def get_user_sessions_admin(user_id: str, limit: int = 50, offset: int = 0
 @app.get("/admin/users/{user_id}/messages")
 async def get_user_messages_admin(user_id: str, limit: int = 50, offset: int = 0, session_id: Optional[str] = None):
     """Get messages for a specific user (admin endpoint)."""
-    api_logger.log_request("GET", f"/admin/users/{user_id}/messages", request_id=f"get_user_messages_{user_id}")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -1016,7 +1024,7 @@ async def get_user_messages_admin(user_id: str, limit: int = 50, offset: int = 0
 @app.get("/user/{user_id}/sessions")
 async def get_user_sessions(user_id: str):
     """Get chat sessions for a specific user."""
-    api_logger.log_request("GET", f"/user/{user_id}/sessions")
+    api_logger.info(f"🌐 GET /user/{user_id}/sessions")
 
     start_time = datetime.utcnow()
 
@@ -1045,7 +1053,7 @@ async def get_user_sessions(user_id: str):
             sessions.append(session_data)
 
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(200, processing_time, user_id=user_id)
+        api_logger.info(f"✅ Response 200 ({processing_time:.2f}ms) - User: {user_id}")
 
         return {
             "success": True,
@@ -1055,7 +1063,7 @@ async def get_user_sessions(user_id: str):
 
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(500, processing_time, user_id=user_id)
+        api_logger.error(f"❌ Response 500 ({processing_time:.2f}ms) - User: {user_id}")
         api_logger.error(f"❌ Error getting user sessions: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1066,7 +1074,7 @@ async def get_user_sessions(user_id: str):
 @app.get("/session/{session_id}/messages")
 async def get_session_messages(session_id: str):
     """Get messages for a specific session."""
-    api_logger.log_request("GET", f"/session/{session_id}/messages")
+    api_logger.info(f"🌐 GET /session/{session_id}/messages")
 
     start_time = datetime.utcnow()
 
@@ -1118,7 +1126,7 @@ async def get_session_messages(session_id: str):
 @app.put("/session/{session_id}/title")
 async def update_session_title(session_id: str, title_data: dict):
     """Update session title."""
-    api_logger.log_request("PUT", f"/session/{session_id}/title")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -1176,7 +1184,7 @@ async def update_session_title(session_id: str, title_data: dict):
 @app.delete("/session/{session_id}")
 async def delete_session(session_id: str):
     """Delete a session and all its messages."""
-    api_logger.log_request("DELETE", f"/session/{session_id}")
+    api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
 
@@ -1221,15 +1229,22 @@ async def delete_session(session_id: str):
 
 # S3 File Management Endpoints
 @app.post("/api/s3/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Upload a file to S3 storage."""
+async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
+    """Upload a file to S3 storage for a specific user."""
+    api_logger.info(f"🌐 POST /api/s3/upload - User: {user_id}, File: {file.filename}")
     start_time = datetime.utcnow()
 
-    if not S3_AVAILABLE:
-        api_logger.error("❌ S3 manager not available")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required"
+        )
+
+    if not S3_AVAILABLE and not FILE_MANAGER_AVAILABLE:
+        api_logger.error("❌ File management services not available")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="S3 service not available"
+            detail="File management service not available"
         )
 
     try:
@@ -1283,31 +1298,52 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.get("/api/s3/files")
-async def list_files():
-    """List all files in S3 storage."""
+async def list_files(user_id: str):
+    """List files for a specific user."""
+    api_logger.info(f"🌐 GET /api/s3/files - User: {user_id}")
     start_time = datetime.utcnow()
 
-    if not S3_AVAILABLE:
-        api_logger.error("❌ S3 manager not available")
+    if not user_id:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="S3 service not available"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required"
         )
 
     try:
-        s3_manager = get_s3_manager()
-        result = s3_manager.list_files()
+        # Use FileManager for user-specific file listing
+        if FILE_MANAGER_AVAILABLE:
+            file_manager = get_file_manager()
+            user_files = file_manager.get_user_files(user_id)
+            limit_check = file_manager.check_file_limit(user_id)
 
-        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            api_logger.info(f"✅ Listed {len(user_files)} files for user {user_id} ({processing_time:.2f}ms)")
 
-        if result['success']:
-            api_logger.log_response(200, processing_time)
-            api_logger.info(f"✅ Listed {len(result.get('files', []))} files")
-            return JSONResponse(content=result)
+            return JSONResponse(content={
+                "success": True,
+                "files": user_files,
+                "total_files": len(user_files),
+                "file_limit": limit_check
+            })
         else:
-            api_logger.log_response(500, processing_time)
-            api_logger.error(f"❌ List files failed: {result['error']}")
-            raise HTTPException(status_code=500, detail=result['error'])
+            # Fallback to S3 manager (less secure)
+            if not S3_AVAILABLE:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="File management service not available"
+                )
+
+            s3_manager = get_s3_manager()
+            result = s3_manager.list_files()
+
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+            if result['success']:
+                api_logger.info(f"✅ Listed {len(result.get('files', []))} files (fallback) ({processing_time:.2f}ms)")
+                return JSONResponse(content=result)
+            else:
+                api_logger.error(f"❌ List files failed: {result['error']}")
+                raise HTTPException(status_code=500, detail=result['error'])
 
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
@@ -1364,31 +1400,57 @@ async def download_file(file_key: str):
 
 
 @app.delete("/api/s3/delete/{file_key:path}")
-async def delete_file(file_key: str):
-    """Delete a file from S3 storage."""
+async def delete_file(file_key: str, user_id: str):
+    """Delete a file from S3 storage (only if owned by user)."""
+    api_logger.info(f"🌐 DELETE /api/s3/delete/{file_key} - User: {user_id}")
     start_time = datetime.utcnow()
 
-    if not S3_AVAILABLE:
-        api_logger.error("❌ S3 manager not available")
+    if not user_id:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="S3 service not available"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required"
         )
 
     try:
-        s3_manager = get_s3_manager()
-        result = s3_manager.delete_file(file_key)
+        # Use FileManager for secure deletion with ownership check
+        if FILE_MANAGER_AVAILABLE:
+            file_manager = get_file_manager()
+            success = file_manager.delete_file(file_key, user_id)
 
-        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
 
-        if result['success']:
-            api_logger.log_response(200, processing_time)
-            api_logger.info(f"✅ File deleted: {file_key}")
-            return JSONResponse(content=result)
+            if success:
+                api_logger.info(f"✅ File deleted: {file_key} by user {user_id} ({processing_time:.2f}ms)")
+                return JSONResponse(content={
+                    "success": True,
+                    "message": "File deleted successfully",
+                    "file_key": file_key
+                })
+            else:
+                api_logger.error(f"❌ Delete failed: File not found or access denied for user {user_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="File not found or access denied"
+                )
         else:
-            api_logger.log_response(500, processing_time)
-            api_logger.error(f"❌ Delete failed: {result['error']}")
-            raise HTTPException(status_code=500, detail=result['error'])
+            # Fallback to S3 manager (less secure)
+            if not S3_AVAILABLE:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="File management service not available"
+                )
+
+            s3_manager = get_s3_manager()
+            result = s3_manager.delete_file(file_key)
+
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+            if result['success']:
+                api_logger.info(f"✅ File deleted (fallback): {file_key} ({processing_time:.2f}ms)")
+                return JSONResponse(content=result)
+            else:
+                api_logger.error(f"❌ Delete failed: {result['error']}")
+                raise HTTPException(status_code=500, detail=result['error'])
 
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000

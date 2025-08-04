@@ -228,6 +228,12 @@ data/
 # PID files
 *.pid
 
+# Additional cache and temporary files
+.*.pid
+*.tmp
+*.temp
+.cache/
+
 # React Frontend
 frontend/node_modules/
 frontend/dist/

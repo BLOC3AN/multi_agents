@@ -31,12 +31,12 @@ check-deps: ## Check if Python and required tools are installed
 	@command -v $(PYTHON) >/dev/null 2>&1 || { echo "❌ Python not found"; exit 1; }
 	@command -v docker >/dev/null 2>&1 || { echo "❌ Docker not installed"; exit 1; }
 	@if [ -z "$(DOCKER_COMPOSE)" ]; then echo "❌ Docker Compose not found (tried 'docker-compose' and 'docker compose')"; exit 1; fi
-	@command -v streamlit >/dev/null 2>&1 || { echo "⚠️  Streamlit not installed (will be installed with dependencies)"; }
+
 	@echo "✅ Python: $$($(PYTHON) --version)"
 	@$(PYTHON) -c "import sys; exit(0 if sys.version_info >= (3, 10) else 1)" || { echo "❌ Python 3.10+ required (current: $$($(PYTHON) --version))"; echo "� Try: python3.10 --version or see PYTHON_UPGRADE_GUIDE.md"; exit 1; }
 	@echo "✅ Docker: $$(docker --version)"
 	@echo "✅ Docker Compose: $(DOCKER_COMPOSE)"
-	@if command -v streamlit >/dev/null 2>&1; then echo "✅ Streamlit: $$(streamlit --version)"; fi
+
 
 # Install dependencies
 install: check-deps ## Install Python dependencies
@@ -125,8 +125,6 @@ up-auth: ## Start Authentication API server
 	    echo "📋 Logs: tail -f logs/auth.log"; \
 	fi
 
-# Legacy GUI commands removed - migrated to React frontend
-
 # React Frontend Commands
 install-react: ## Install React frontend dependencies
 	@echo "📦 Checking React frontend dependencies..."
@@ -164,13 +162,7 @@ build-react: ## Build React frontend for production
 	@cd frontend && npm run build
 	@echo "✅ React build completed"
 
-# Development mode with React (legacy - use 'dev' instead)
-dev-react: install setup-react up-redis up-socketio up-auth up-react ## Quick development start with React
-	@echo "🎉 React development environment ready!"
-	@echo "Services:"
-	@echo "  - React Frontend: http://localhost:3000"
-	@echo "  - Auth API: http://localhost:8000"
-	@echo "  - SocketIO: http://localhost:8001"
+
 
 # Stop all services
 down: down-react down-auth down-socketio down-redis ## Stop all services
@@ -203,8 +195,6 @@ down-auth: ## Stop Authentication API server
 	    echo "⚠️  Auth API not running"; \
 	fi
 
-# Legacy GUI stop command removed
-
 # Stop React
 down-react: ## Stop React development server
 	@echo "🛑 Stopping React development server..."
@@ -225,8 +215,6 @@ restart-socketio: down-socketio up-socketio ## Restart SocketIO server
 
 restart-auth: down-auth up-auth ## Restart Authentication API server
 
-# Legacy GUI restart command removed
-
 # Show logs
 logs: ## Show all logs (follow mode)
 	@echo "📋 Showing all logs (Ctrl+C to exit)..."
@@ -244,8 +232,6 @@ logs-socketio: ## Show SocketIO logs
 logs-auth: ## Show Authentication API logs
 	@echo "📋 Auth API logs:"
 	@tail -f logs/auth.log 2>/dev/null || echo "⚠️  Auth API log not found"
-
-# Legacy GUI logs command removed
 
 logs-redis: ## Show Redis logs
 	@echo "📋 Redis logs:"
@@ -273,7 +259,7 @@ status: ## Show service status
 	else \
 	    echo "⭕ Auth API: Not running"; \
 	fi
-	# Legacy GUI status check removed
+
 	@if [ -f $(REACT_PID_FILE) ]; then \
 	    if ps -p $$(cat $(REACT_PID_FILE)) > /dev/null 2>&1; then \
 	        echo "✅ React Frontend: Running (PID: $$(cat $(REACT_PID_FILE))) - http://localhost:3000"; \
@@ -292,8 +278,8 @@ health: ## Check service health
 	@echo "=================="
 	@echo -n "SocketIO (http://localhost:8001/health): "
 	@curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/health 2>/dev/null | grep -q "200" && echo "✅ Healthy" || echo "❌ Unhealthy"
-	@echo -n "GUI (http://localhost:8501/_stcore/health): "
-	@curl -s -o /dev/null -w "%{http_code}" http://localhost:8501/_stcore/health 2>/dev/null | grep -q "200" && echo "✅ Healthy" || echo "❌ Unhealthy"
+	@echo -n "Auth API (http://localhost:8000/docs): "
+	@curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null | grep -q "200" && echo "✅ Healthy" || echo "❌ Unhealthy"
 
 # Clean up
 clean: down ## Stop services and clean up
@@ -305,14 +291,26 @@ clean-all: down ## Deep cleanup (logs, cache, temp files)
 	@echo "🧹 Deep cleaning..."
 	@rm -f logs/*.log .*.pid
 	@chmod +x cleanup.sh
-	@./cleanup.sh
+	@./cleanup.sh --deep --logs
 	@echo "✅ Deep cleanup completed"
+
+clean-cache: ## Clean only cache files (Python, test, etc.)
+	@echo "🧹 Cleaning cache files..."
+	@chmod +x cleanup.sh
+	@./cleanup.sh
+	@echo "✅ Cache cleanup completed"
+
+clean-logs: ## Clean only log files
+	@echo "🧹 Cleaning log files..."
+	@chmod +x cleanup.sh
+	@./cleanup.sh --logs
+	@echo "✅ Log cleanup completed"
 
 # Force kill all processes
 kill-all: ## Force kill all processes
 	@echo "💀 Force killing processes..."
 	@pkill -f "socketio_server.py" 2>/dev/null || echo "No SocketIO processes"
-	@pkill -f "streamlit run gui/main.py" 2>/dev/null || echo "No GUI processes"
+	@pkill -f "auth_server.py" 2>/dev/null || echo "No Auth API processes"
 	@rm -f .*.pid
 	@echo "✅ All processes killed"
 
@@ -338,12 +336,12 @@ lint: ## Run code linting
 
 format: ## Format code with black
 	@echo "🎨 Formatting code..."
-	@black src/ tests/ gui/ --line-length=88
+	@black src/ tests/ --line-length=88
 	@echo "✅ Code formatted"
 
 format-check: ## Check if code is properly formatted
 	@echo "🎨 Checking code format..."
-	@black src/ tests/ gui/ --check --line-length=88
+	@black src/ tests/ --check --line-length=88
 	@echo "✅ Code format check completed"
 
 # Docker Management
@@ -358,7 +356,7 @@ docker-up: ## Start services with Docker
 	    echo "❌ .env file not found. Run 'make setup' first"; \
 	    exit 1; \
 	fi
-	@cd deployment && $(DOCKER_COMPOSE) up -d redis socketio-server streamlit-gui
+	@cd deployment && $(DOCKER_COMPOSE) up -d redis socketio-server
 	@echo "⏳ Waiting for services..."
 	@sleep 10
 	@make docker-status
@@ -439,10 +437,13 @@ help-detailed: ## Show detailed help with examples
 	@echo "📋 Logs & Monitoring:"
 	@echo "  make logs          - Show all logs"
 	@echo "  make logs-socketio - Show SocketIO logs"
-	@echo "  make logs-gui      - Show GUI logs"
+	@echo "  make logs-react    - Show React logs"
 	@echo ""
 	@echo "🧹 Cleanup:"
 	@echo "  make clean         - Clean logs and PIDs"
+	@echo "  make clean-all     - Deep cleanup (logs, cache, temp files)"
+	@echo "  make clean-cache   - Clean only cache files"
+	@echo "  make clean-logs    - Clean only log files"
 	@echo "  make kill-all      - Force kill all processes"
 	@echo ""
 	@echo "🌐 Access Points:"
@@ -459,8 +460,6 @@ open-react: ## Open React frontend in browser
 open-auth: ## Open Auth API in browser
 	@echo "🌐 Opening Auth API..."
 	@open http://localhost:8000/docs 2>/dev/null || xdg-open http://localhost:8000/docs 2>/dev/null || echo "Please open http://localhost:8000/docs manually"
-
-# Legacy GUI open command removed
 
 open-socketio: ## Open SocketIO health check in browser
 	@echo "🌐 Opening SocketIO health check..."

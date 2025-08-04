@@ -173,34 +173,69 @@ export const useSocket = (props?: UseSocketProps): UseSocketReturn => {
         messagesCache.current.set(data.session_id, updatedMessages);
         console.log('💾 Cache updated for session:', data.session_id, 'with', updatedMessages.length, 'messages');
       } else {
-        // Fallback: create new complete message
-        console.log('⚠️ No existing message found to update, creating new message');
-        const message: ChatMessage = {
-          message_id: data.message_id || `msg_${Date.now()}`,
-          session_id: data.session_id,
-          user_id: user?.user_id || '',
-          user_input: data.user_input || '',
-          agent_response: data.response,
-          detected_intents: data.detected_intents,
-          primary_intent: data.primary_intent,
-          processing_mode: data.processing_mode,
-          agent_results: data.agent_responses,
-          execution_summary: data.execution_summary,
-          created_at: data.timestamp || new Date().toISOString(),
-          processing_time: data.processing_time,
-          errors: data.errors,
-          success: data.status === 'success',
-          metadata: data.metadata,
-        };
+        // Fallback: Try to find ANY user message without response in this session
+        console.log('⚠️ No exact match found, looking for any user message without response');
+        const anyUserMessageWithoutResponse = [...currentMessages].reverse().find(msg =>
+          msg.user_input && (!msg.agent_response || msg.agent_response.trim() === '') && msg.session_id === data.session_id
+        );
 
-        console.log('➕ Adding new complete message:', message);
-        addMessage(message);
+        if (anyUserMessageWithoutResponse) {
+          // Update the found message
+          const updatedMessage: ChatMessage = {
+            ...anyUserMessageWithoutResponse,
+            agent_response: data.response,
+            detected_intents: data.detected_intents,
+            primary_intent: data.primary_intent,
+            processing_mode: data.processing_mode,
+            agent_results: data.agent_responses,
+            execution_summary: data.execution_summary,
+            processing_time: data.processing_time,
+            errors: data.errors,
+            success: data.status === 'success',
+            metadata: data.metadata,
+          };
 
-        // Update cache for fallback case too
-        const currentCachedMessages = messagesCache.current.get(data.session_id) || [];
-        const updatedCachedMessages = [...currentCachedMessages, message];
-        messagesCache.current.set(data.session_id, updatedCachedMessages);
-        console.log('💾 Cache updated (fallback) for session:', data.session_id, 'with', updatedCachedMessages.length, 'messages');
+          console.log('🔄 Updating found user message with AI response:', updatedMessage);
+
+          // Update messages in state
+          const updatedMessages = currentMessages.map(msg =>
+            msg.message_id === anyUserMessageWithoutResponse.message_id ? updatedMessage : msg
+          );
+          setMessages(updatedMessages);
+
+          // Update cache
+          messagesCache.current.set(data.session_id, updatedMessages);
+          console.log('💾 Cache updated for session:', data.session_id, 'with', updatedMessages.length, 'messages');
+        } else {
+          // Last resort: Create AI-only message (no duplicate user input)
+          console.log('⚠️ No user message found to update, creating AI-only response message');
+          const aiOnlyMessage: ChatMessage = {
+            message_id: data.message_id || `ai_msg_${Date.now()}`,
+            session_id: data.session_id,
+            user_id: user?.user_id || '',
+            user_input: '', // No user input to avoid duplication
+            agent_response: data.response,
+            detected_intents: data.detected_intents,
+            primary_intent: data.primary_intent,
+            processing_mode: data.processing_mode,
+            agent_results: data.agent_responses,
+            execution_summary: data.execution_summary,
+            created_at: data.timestamp || new Date().toISOString(),
+            processing_time: data.processing_time,
+            errors: data.errors,
+            success: data.status === 'success',
+            metadata: data.metadata,
+          };
+
+          console.log('➕ Adding AI-only response message:', aiOnlyMessage);
+          addMessage(aiOnlyMessage);
+
+          // Update cache for fallback case too
+          const currentCachedMessages = messagesCache.current.get(data.session_id) || [];
+          const updatedCachedMessages = [...currentCachedMessages, aiOnlyMessage];
+          messagesCache.current.set(data.session_id, updatedCachedMessages);
+          console.log('💾 Cache updated (fallback) for session:', data.session_id, 'with', updatedCachedMessages.length, 'messages');
+        }
       }
     });
 

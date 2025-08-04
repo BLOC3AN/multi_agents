@@ -74,61 +74,8 @@ def create_agent_graph():
     return builder.compile()
 
 
-def create_legacy_agent_graph():
-    """Create the legacy single-agent graph for backward compatibility."""
-    from src.agents.context_agent import context_agent
-    from src.agents.math_agent import math_agent
-    from src.agents.poem_agent import poem_agent
-    from src.agents.english_agent import english_agent
-
-    def route_from_primary_intent(state: AgentState) -> str:
-        """Route based on primary intent."""
-        intent = state.get("primary_intent")
-
-        if intent == "math":
-            return "MathAgent"
-        elif intent == "poem":
-            return "PoemAgent"
-        elif intent == "english":
-            return "EnglishAgent"
-        else:
-            return "EnglishAgent"
-
-    builder = StateGraph(AgentState)
-
-    # Add nodes
-    builder.add_node("ContextAgent", context_agent)
-    builder.add_node("MathAgent", math_agent)
-    builder.add_node("PoemAgent", poem_agent)
-    builder.add_node("EnglishAgent", english_agent)
-
-    # Set entry point
-    builder.set_entry_point("ContextAgent")
-
-    # Add conditional routing from context agent
-    builder.add_conditional_edges(
-        "ContextAgent",
-        route_from_primary_intent,
-        {
-            "MathAgent": "MathAgent",
-            "EnglishAgent": "EnglishAgent",
-            "PoemAgent": "PoemAgent",
-        }
-    )
-
-    # All agents end the flow
-    builder.add_edge("MathAgent", END)
-    builder.add_edge("EnglishAgent", END)
-    builder.add_edge("PoemAgent", END)
-
-    return builder.compile()
-
-
 # Create the enhanced parallel graph instance
 graph = create_agent_graph()
-
-# Legacy graph for backward compatibility
-legacy_graph = create_legacy_agent_graph()
 
 
 def create_initial_state(user_input: str) -> AgentState:

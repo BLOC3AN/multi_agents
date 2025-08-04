@@ -76,7 +76,7 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
 
   // Sort sessions by creation time (newest first) and limit to 10 for preview
   const sortedSessions = useMemo(() => {
-    return [...sessions].sort((a, b) => 
+    return [...sessions].sort((a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }, [sessions]);

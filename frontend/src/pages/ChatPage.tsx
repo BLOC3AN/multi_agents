@@ -24,6 +24,33 @@ const ChatPage: React.FC = () => {
   const [newSessionName, setNewSessionName] = useState('');
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+
+  // Manual reload sessions function for debugging
+  const reloadSessions = async () => {
+    if (user?.user_id && authenticated) {
+      console.log('🔄 Manually reloading sessions for user:', user.user_id);
+      setIsLoadingSessions(true);
+      try {
+        const response = await getUserSessions(user.user_id);
+        console.log('📋 Manual reload API Response:', response);
+        if (response.success && response.data) {
+          console.log('📋 Manual reload - Loaded sessions:', response.data.length, response.data);
+          // Clear existing sessions first
+          clearAll();
+          response.data.forEach(session => {
+            console.log('➕ Manual reload - Adding session:', session);
+            addSession(session);
+          });
+        } else {
+          console.log('⚠️ Manual reload - No sessions data or API error:', response);
+        }
+      } catch (error) {
+        console.error('Manual reload - Failed to load user sessions:', error);
+      } finally {
+        setIsLoadingSessions(false);
+      }
+    }
+  };
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);

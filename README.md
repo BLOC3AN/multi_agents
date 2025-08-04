@@ -47,8 +47,7 @@ src/
 ├── agents/                    # Specialized agents
 │   ├── math_agent.py         # Mathematical problem solving
 │   ├── english_agent.py      # Concept explanations and Q&A
-│   ├── poem_agent.py         # Creative writing and poetry
-│   └── context_agent.py      # Legacy compatibility layer
+│   └── poem_agent.py         # Creative writing and poetry
 ├── llms/                      # LLM provider abstraction
 │   ├── llm_factory.py        # Factory pattern for LLM creation
 │   ├── gemini.py             # Google Gemini provider
@@ -344,6 +343,15 @@ curl -X POST "http://localhost:8000/process" \
 - **grafana**: Monitoring dashboard (optional)
 
 For detailed deployment instructions, see [`deployment/README.md`](deployment/README.md).
+
+---
+
+## 📚 Additional Documentation
+
+- [Makefile Guide](docs/MAKEFILE_GUIDE.md) - Detailed Makefile commands and usage
+- [Python Upgrade Guide](docs/PYTHON_UPGRADE_GUIDE.md) - How to upgrade to Python 3.10+
+- [S3 Setup Guide](docs/S3_SETUP_GUIDE.md) - S3 storage configuration and usage
+- [File Management](docs/FILE_MANAGEMENT_README.md) - File management system documentation
 
 ---
 

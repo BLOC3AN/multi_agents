@@ -79,7 +79,8 @@ make down         # Just stop services
 ### 📋 Logs & Monitoring
 - `make logs` - Show all logs (follow mode)
 - `make logs-socketio` - Show SocketIO logs
-- `make logs-gui` - Show GUI logs
+- `make logs-auth` - Show Auth API logs
+- `make logs-react` - Show React logs
 - `make logs-redis` - Show Redis logs
 
 ### 🧹 Cleanup

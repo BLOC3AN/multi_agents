@@ -31,14 +31,3 @@ class PoemAgent(BaseAgent):
         return prompt
 
 
-# Legacy function for backward compatibility
-def poem_agent(state: AgentState) -> AgentState:
-    """
-    Legacy function for backward compatibility.
-    Use PoemAgent class directly for new code.
-    """
-    from src.config.settings import config
-
-    factory = LLMFactory(config.llm)
-    agent = PoemAgent(factory)
-    return agent.process(state)

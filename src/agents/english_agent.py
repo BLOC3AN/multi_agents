@@ -31,14 +31,3 @@ class EnglishAgent(BaseAgent):
         return prompt
 
 
-# Legacy function for backward compatibility
-def english_agent(state: AgentState) -> AgentState:
-    """
-    Legacy function for backward compatibility.
-    Use EnglishAgent class directly for new code.
-    """
-    from src.config.settings import config
-
-    factory = LLMFactory(config.llm)
-    agent = EnglishAgent(factory)
-    return agent.process(state)
