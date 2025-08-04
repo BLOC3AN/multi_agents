@@ -3,7 +3,7 @@ Database models and connection management for Multi-Agent System.
 """
 import os
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 from pymongo import MongoClient
 from pymongo.database import Database
@@ -26,6 +26,34 @@ class User:
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
     preferences: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for MongoDB storage."""
+        data = asdict(self)
+        # Convert datetime objects to ISO strings
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+        return data
+
+
+@dataclass
+class Admin:
+    """Admin model for administrative user management."""
+    admin_id: str
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    password_hash: Optional[str] = None
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
+    permissions: Optional[Dict[str, Any]] = None
+    role: str = "admin"  # admin, super_admin, etc.
+    can_manage_users: bool = True
+    can_manage_system: bool = True
+    can_view_logs: bool = True
+    notes: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for MongoDB storage."""
@@ -147,6 +175,7 @@ class DatabaseConfig:
         
         # Collections
         self.users: Collection = self.database.users
+        self.admins: Collection = self.database.admins
         self.sessions: Collection = self.database.chat_sessions
         self.messages: Collection = self.database.chat_messages
         self.logs: Collection = self.database.system_logs
@@ -173,6 +202,13 @@ class DatabaseConfig:
             self.users.create_index("email", unique=True, sparse=True)
             self.users.create_index("created_at")
             self.users.create_index("is_active")
+
+            # Admins collection indexes
+            self.admins.create_index("admin_id", unique=True)
+            self.admins.create_index("email", unique=True, sparse=True)
+            self.admins.create_index("created_at")
+            self.admins.create_index("is_active")
+            self.admins.create_index("role")
             
             # Chat sessions collection indexes
             self.sessions.create_index("session_id", unique=True)
@@ -303,3 +339,118 @@ def ensure_session_exists(session_id: str, user_id: str) -> bool:
     except Exception as e:
         print(f"❌ Failed to ensure session exists: {e}")
         return False
+
+
+# Admin management functions
+def create_admin(admin_id: str, password: str, display_name: str = None, email: str = None,
+                role: str = "admin", **kwargs) -> bool:
+    """Create a new admin user."""
+    try:
+        db_config = get_db_config()
+
+        # Check if admin already exists
+        existing_admin = db_config.admins.find_one({"admin_id": admin_id})
+        if existing_admin:
+            print(f"❌ Admin already exists: {admin_id}")
+            return False
+
+        # Hash password
+        from auth_server import hash_password
+        password_hash = hash_password(password)
+
+        # Create admin
+        admin = Admin(
+            admin_id=admin_id,
+            password_hash=password_hash,
+            display_name=display_name or admin_id,
+            email=email,
+            role=role,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            **kwargs
+        )
+
+        admin_doc = admin.to_dict()
+        db_config.admins.insert_one(admin_doc)
+        print(f"✅ Admin created: {admin_id}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Failed to create admin: {e}")
+        return False
+
+
+def get_admin(admin_id: str) -> Optional[Dict[str, Any]]:
+    """Get admin by admin_id."""
+    try:
+        db_config = get_db_config()
+        return db_config.admins.find_one({"admin_id": admin_id})
+    except Exception as e:
+        print(f"❌ Failed to get admin: {e}")
+        return None
+
+
+def update_admin(admin_id: str, **updates) -> bool:
+    """Update admin information."""
+    try:
+        db_config = get_db_config()
+
+        # Add updated_at timestamp
+        updates["updated_at"] = datetime.utcnow().isoformat()
+
+        result = db_config.admins.update_one(
+            {"admin_id": admin_id},
+            {"$set": updates}
+        )
+
+        if result.modified_count > 0:
+            print(f"✅ Admin updated: {admin_id}")
+            return True
+        else:
+            print(f"❌ Admin not found or no changes: {admin_id}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Failed to update admin: {e}")
+        return False
+
+
+def delete_admin(admin_id: str) -> bool:
+    """Delete admin (soft delete by setting is_active=False)."""
+    try:
+        db_config = get_db_config()
+
+        result = db_config.admins.update_one(
+            {"admin_id": admin_id},
+            {"$set": {"is_active": False, "updated_at": datetime.utcnow().isoformat()}}
+        )
+
+        if result.modified_count > 0:
+            print(f"✅ Admin deactivated: {admin_id}")
+            return True
+        else:
+            print(f"❌ Admin not found: {admin_id}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Failed to delete admin: {e}")
+        return False
+
+
+def list_admins(active_only: bool = True) -> List[Dict[str, Any]]:
+    """List all admins."""
+    try:
+        db_config = get_db_config()
+
+        query = {"is_active": True} if active_only else {}
+        admins = list(db_config.admins.find(query))
+
+        # Remove password_hash from results
+        for admin in admins:
+            admin.pop("password_hash", None)
+
+        return admins
+
+    except Exception as e:
+        print(f"❌ Failed to list admins: {e}")
+        return []

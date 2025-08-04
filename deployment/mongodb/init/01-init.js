@@ -48,6 +48,76 @@ db.createCollection("users", {
    }
 });
 
+// Create admins collection with validation
+db.createCollection("admins", {
+   validator: {
+      $jsonSchema: {
+         bsonType: "object",
+         required: ["admin_id", "created_at"],
+         properties: {
+            admin_id: {
+               bsonType: "string",
+               description: "must be a string and is required"
+            },
+            display_name: {
+               bsonType: "string",
+               description: "must be a string if the field exists"
+            },
+            email: {
+               bsonType: "string",
+               pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+               description: "must be a valid email address if the field exists"
+            },
+            password_hash: {
+               bsonType: "string",
+               description: "must be a string if the field exists"
+            },
+            created_at: {
+               bsonType: "string",
+               description: "must be an ISO date string and is required"
+            },
+            updated_at: {
+               bsonType: "string",
+               description: "must be an ISO date string"
+            },
+            last_login: {
+               bsonType: "string",
+               description: "must be an ISO date string"
+            },
+            is_active: {
+               bsonType: "bool",
+               description: "must be a boolean"
+            },
+            role: {
+               bsonType: "string",
+               enum: ["admin", "super_admin"],
+               description: "must be a valid admin role"
+            },
+            can_manage_users: {
+               bsonType: "bool",
+               description: "must be a boolean"
+            },
+            can_manage_system: {
+               bsonType: "bool",
+               description: "must be a boolean"
+            },
+            can_view_logs: {
+               bsonType: "bool",
+               description: "must be a boolean"
+            },
+            permissions: {
+               bsonType: "object",
+               description: "must be an object if the field exists"
+            },
+            notes: {
+               bsonType: "string",
+               description: "must be a string if the field exists"
+            }
+         }
+      }
+   }
+});
+
 db.createCollection("chat_sessions", {
    validator: {
       $jsonSchema: {
