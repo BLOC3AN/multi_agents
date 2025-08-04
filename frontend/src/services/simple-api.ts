@@ -513,3 +513,51 @@ export async function deleteAdminFile(fileKey: string, userId: string): Promise<
     };
   }
 }
+
+// Admin Messages API
+export async function getAdminMessages(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+  try {
+    console.log('💬 Getting all messages (admin)');
+
+    const response = await axios.get(`${API_BASE_URL}/admin/messages`, {
+      timeout: 10000,
+    });
+
+    console.log('💬 Admin messages response:', response.data);
+
+    return {
+      success: true,
+      data: response.data.messages || [],
+    };
+
+  } catch (error: any) {
+    console.error('💬 Admin messages error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to get messages',
+    };
+  }
+}
+
+export async function deleteAdminMessage(messageId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('🗑️ Deleting message (admin):', messageId);
+
+    const response = await axios.delete(`${API_BASE_URL}/admin/messages/${messageId}`, {
+      timeout: 10000,
+    });
+
+    console.log('🗑️ Admin delete message response:', response.data);
+
+    return {
+      success: true,
+    };
+
+  } catch (error: any) {
+    console.error('🗑️ Admin delete message error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to delete message',
+    };
+  }
+}

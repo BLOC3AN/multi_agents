@@ -1412,4 +1412,12 @@
   .dark .admin-list-scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(75, 85, 99, 0.7);
   }
+
+  /* Line clamp utilities */
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }

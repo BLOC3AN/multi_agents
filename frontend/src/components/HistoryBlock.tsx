@@ -127,8 +127,8 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
     <div
       className="w-full flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-600 transition-all duration-200"
       style={{
-        height: 'calc(100vh * 0.3)', // Fixed height để không bị chạy
-        maxHeight: 'calc(100vh * 0.3)'
+        minHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.30)',
+        maxHeight: isCollapsed ? 'auto' : 'calc(100vh * 0.3)'
       }}
     >
       {/* History Header */}

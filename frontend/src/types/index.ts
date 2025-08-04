@@ -154,6 +154,7 @@ export interface AdminStats {
   total_sessions: number;
   active_sessions: number;
   total_messages: number;
+  total_files: number;
   recent_sessions_24h: number;
   recent_messages_24h: number;
 }

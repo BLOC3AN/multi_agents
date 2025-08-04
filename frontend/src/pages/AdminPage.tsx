@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import FilePreviewModal from '../components/FilePreviewModal';
+
+// Lazy load heavy components
+const FilePreviewModal = lazy(() => import('../components/FilePreviewModal'));
 import {
   getAdminUsers,
   getAdminSessions,
   getAdminStats,
   getAdminFiles,
+  getAdminMessages,
   deleteAdminFile,
+  deleteAdminMessage,
   createUser,
   updateUser,
   deleteUser,
@@ -24,17 +28,44 @@ import Toast from '../components/Toast';
 const AdminPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions' | 'files'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions' | 'messages' | 'files'>('stats');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Data states
+  // Data states with caching
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [sessions, setSessions] = useState<AdminSession[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]);
+
+  // Cache tracking - track which data has been loaded
+  const [dataCache, setDataCache] = useState({
+    stats: false,
+    users: false,
+    sessions: false,
+    messages: false,
+    files: false
+  });
   const [fileFilter, setFileFilter] = useState<string>('');
   const [fileSortBy, setFileSortBy] = useState<'name' | 'size' | 'date' | 'user'>('date');
+
+  // Debounced search for better performance
+  const [debouncedFileFilter, setDebouncedFileFilter] = useState<string>('');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20); // Show 20 items per page
+
+  // Debounce file filter
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFileFilter(fileFilter);
+      setCurrentPage(1); // Reset to first page when filter changes
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [fileFilter]);
 
   // Modal states
   const [previewModal, setPreviewModal] = useState<{isOpen: boolean, fileKey: string, fileName: string}>({
@@ -67,47 +98,104 @@ const AdminPage: React.FC = () => {
     }
   }, [isAdmin, activeTab]);
 
+  // Individual data loaders for lazy loading
+  const loadStats = async () => {
+    if (dataCache.stats) return; // Skip if already loaded
+
+    try {
+      const response = await getAdminStats();
+      if (response.success && response.data) {
+        setStats(response.data);
+        setDataCache(prev => ({ ...prev, stats: true }));
+      } else {
+        setError(response.error || 'Failed to load statistics');
+      }
+    } catch (error) {
+      setError('Failed to load statistics');
+    }
+  };
+
+  const loadUsers = async () => {
+    if (dataCache.users) return; // Skip if already loaded
+
+    try {
+      const response = await getAdminUsers();
+      if (response.success && response.data) {
+        setUsers(response.data);
+        setDataCache(prev => ({ ...prev, users: true }));
+      } else {
+        setError(response.error || 'Failed to load users');
+      }
+    } catch (error) {
+      setError('Failed to load users');
+    }
+  };
+
+  const loadSessions = async () => {
+    if (dataCache.sessions) return; // Skip if already loaded
+
+    try {
+      const response = await getAdminSessions();
+      if (response.success && response.data) {
+        setSessions(response.data);
+        setDataCache(prev => ({ ...prev, sessions: true }));
+      } else {
+        setError(response.error || 'Failed to load sessions');
+      }
+    } catch (error) {
+      setError('Failed to load sessions');
+    }
+  };
+
+  const loadMessages = async () => {
+    if (dataCache.messages) return; // Skip if already loaded
+
+    try {
+      const response = await getAdminMessages();
+      if (response.success && response.data) {
+        setMessages(response.data);
+        setDataCache(prev => ({ ...prev, messages: true }));
+      } else {
+        setError(response.error || 'Failed to load messages');
+      }
+    } catch (error) {
+      setError('Failed to load messages');
+    }
+  };
+
+  const loadFiles = async () => {
+    if (dataCache.files) return; // Skip if already loaded
+
+    try {
+      const response = await getAdminFiles();
+      if (response.success && response.data) {
+        setFiles(response.data);
+        setDataCache(prev => ({ ...prev, files: true }));
+      } else {
+        setError(response.error || 'Failed to load files');
+      }
+    } catch (error) {
+      setError('Failed to load files');
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
 
     try {
       if (activeTab === 'stats') {
-        const [statsResponse, filesResponse] = await Promise.all([
-          getAdminStats(),
-          getAdminFiles()
-        ]);
-
-        if (statsResponse.success && statsResponse.data) {
-          setStats(statsResponse.data);
-        } else {
-          setError(statsResponse.error || 'Failed to load stats');
-        }
-
-        if (filesResponse.success && filesResponse.data) {
-          setFiles(filesResponse.data);
-        }
+        // For stats, only load stats data initially
+        // Files and messages will be loaded when their cards are clicked
+        await loadStats();
       } else if (activeTab === 'users') {
-        const response = await getAdminUsers();
-        if (response.success && response.data) {
-          setUsers(response.data);
-        } else {
-          setError(response.error || 'Failed to load users');
-        }
+        await loadUsers();
       } else if (activeTab === 'sessions') {
-        const response = await getAdminSessions();
-        if (response.success && response.data) {
-          setSessions(response.data);
-        } else {
-          setError(response.error || 'Failed to load sessions');
-        }
+        await loadSessions();
+      } else if (activeTab === 'messages') {
+        await loadMessages();
       } else if (activeTab === 'files') {
-        const response = await getAdminFiles();
-        if (response.success && response.data) {
-          setFiles(response.data);
-        } else {
-          setError(response.error || 'Failed to load files');
-        }
+        await loadFiles();
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -198,21 +286,42 @@ const AdminPage: React.FC = () => {
     });
   };
 
-  // Filter and sort files
-  const filteredAndSortedFiles = React.useMemo(() => {
+  const handleDeleteMessage = async (message: any) => {
+    if (!confirm(`Are you sure you want to delete this message from ${message.user_id}?`)) {
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await deleteAdminMessage(message.message_id);
+      if (response.success) {
+        showToast('Message deleted successfully!', 'success');
+        loadData(); // Refresh messages list
+      } else {
+        showToast(response.error || 'Failed to delete message', 'error');
+      }
+    } catch (error) {
+      showToast('An unexpected error occurred', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Filter and sort files with debounced search and pagination
+  const { filteredAndSortedFiles, paginatedFiles, totalPages } = useMemo(() => {
     let filtered = files;
 
-    // Apply filter
-    if (fileFilter) {
+    // Apply debounced filter
+    if (debouncedFileFilter) {
       filtered = files.filter(file =>
-        file.file_name.toLowerCase().includes(fileFilter.toLowerCase()) ||
-        file.user_id.toLowerCase().includes(fileFilter.toLowerCase()) ||
-        file.content_type.toLowerCase().includes(fileFilter.toLowerCase())
+        file.file_name.toLowerCase().includes(debouncedFileFilter.toLowerCase()) ||
+        file.user_id.toLowerCase().includes(debouncedFileFilter.toLowerCase()) ||
+        file.content_type.toLowerCase().includes(debouncedFileFilter.toLowerCase())
       );
     }
 
     // Apply sorting
-    return filtered.sort((a, b) => {
+    const sorted = filtered.sort((a, b) => {
       switch (fileSortBy) {
         case 'name':
           return a.file_name.localeCompare(b.file_name);
@@ -225,13 +334,59 @@ const AdminPage: React.FC = () => {
           return new Date(b.upload_date).getTime() - new Date(a.upload_date).getTime();
       }
     });
-  }, [files, fileFilter, fileSortBy]);
 
-  // Handle navigation from stats cards
-  const handleStatsNavigation = (tab: 'users' | 'sessions' | 'files') => {
+    // Apply pagination
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginated = sorted.slice(startIndex, endIndex);
+    const totalPages = Math.ceil(sorted.length / itemsPerPage);
+
+    return {
+      filteredAndSortedFiles: sorted,
+      paginatedFiles: paginated,
+      totalPages
+    };
+  }, [files, debouncedFileFilter, fileSortBy, currentPage, itemsPerPage]);
+
+  // Force refresh data (clear cache and reload)
+  const refreshData = useCallback(async () => {
+    setDataCache({
+      stats: false,
+      users: false,
+      sessions: false,
+      messages: false,
+      files: false
+    });
+    await loadData();
+  }, []);
+
+  // Handle navigation from stats cards with lazy loading
+  const handleStatsNavigation = async (tab: 'users' | 'sessions' | 'messages' | 'files') => {
     if (tab !== activeTab) {
       setActiveTab(tab);
-      // Data will be loaded automatically by useEffect
+
+      // Pre-load data for the target tab if not already loaded
+      setLoading(true);
+      try {
+        switch (tab) {
+          case 'users':
+            await loadUsers();
+            break;
+          case 'sessions':
+            await loadSessions();
+            break;
+          case 'messages':
+            await loadMessages();
+            break;
+          case 'files':
+            await loadFiles();
+            break;
+        }
+      } catch (error) {
+        console.error('Error pre-loading data:', error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -395,6 +550,7 @@ const AdminPage: React.FC = () => {
               { id: 'stats', label: '📊 Statistics' },
               { id: 'users', label: '👥 Users' },
               { id: 'sessions', label: '💬 Sessions' },
+              { id: 'messages', label: '💬 Messages' },
               { id: 'files', label: '📁 Files' },
             ].map((tab) => (
               <button
@@ -438,7 +594,7 @@ const AdminPage: React.FC = () => {
             <>
               {/* Statistics Tab */}
               {activeTab === 'stats' && stats && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                   <button
                     onClick={() => handleStatsNavigation('users')}
                     className={`bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-left group ${
@@ -475,17 +631,23 @@ const AdminPage: React.FC = () => {
                     </div>
                   </button>
 
-                  <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                  <button
+                    onClick={() => handleStatsNavigation('messages')}
+                    className={`bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-left group ${
+                      activeTab === 'messages' ? 'ring-2 ring-blue-500 border-blue-500' : ''
+                    }`}
+                  >
                     <div className="p-5">
                       <div className="flex items-center">
-                        <span className="text-2xl mr-3">📝</span>
+                        <span className="text-2xl mr-3">💬</span>
                         <div>
                           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Messages</p>
-                          <p className="text-lg font-medium text-gray-900 dark:text-white">{stats.total_messages}</p>
+                          <p className="text-lg font-medium text-gray-900 dark:text-white">{stats?.total_messages || 0}</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">Click to view →</p>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg border-l-4 border-orange-500">
                     <div className="p-5">
@@ -510,7 +672,7 @@ const AdminPage: React.FC = () => {
                         <span className="text-2xl mr-3">📁</span>
                         <div>
                           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Files</p>
-                          <p className="text-lg font-medium text-gray-900 dark:text-white">{files.length}</p>
+                          <p className="text-lg font-medium text-gray-900 dark:text-white">{stats?.total_files || 0}</p>
                           <p className="text-xs text-gray-400 dark:text-gray-500">
                             {formatFileSize(files.reduce((sum, file) => sum + file.file_size, 0))}
                           </p>
@@ -780,6 +942,70 @@ const AdminPage: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* Messages Tab */}
+              {activeTab === 'messages' && (
+                <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+                  <div className="px-4 py-5 sm:px-6">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                      Messages ({messages.length})
+                    </h3>
+                  </div>
+                  {messages.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="text-6xl mb-4">💬</div>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No messages found</h3>
+                      <p className="text-gray-500 dark:text-gray-400">Messages from chat sessions will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-96 overflow-y-auto admin-list-scroll pr-2">
+                      <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {messages.map((message) => (
+                          <li key={message.message_id} className="px-4 py-4 sm:px-6">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start space-x-4 flex-1">
+                                <div className="flex-shrink-0">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    message.role === 'user'
+                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  }`}>
+                                    {message.role === 'user' ? '👤 User' : '🤖 Assistant'}
+                                  </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    <div className="line-clamp-3 mb-2">
+                                      {message.content}
+                                    </div>
+                                  </div>
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    Session: <span className="font-medium">{message.session_id}</span> |
+                                    User: <span className="font-medium">{message.user_id}</span>
+                                  </div>
+                                  <div className="text-xs text-gray-400 dark:text-gray-500">
+                                    {formatDate(message.timestamp)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleDeleteMessage(message)}
+                                  className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors"
+                                  title="Delete Message"
+                                >
+                                  <span className="sm:hidden">🗑️</span>
+                                  <span className="hidden sm:inline">Delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -836,13 +1062,24 @@ const AdminPage: React.FC = () => {
         />
       )}
 
-      {/* File Preview Modal */}
-      <FilePreviewModal
-        isOpen={previewModal.isOpen}
-        onClose={closePreviewModal}
-        fileKey={previewModal.fileKey}
-        fileName={previewModal.fileName}
-      />
+      {/* File Preview Modal - Lazy Loaded */}
+      {previewModal.isOpen && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="mt-2 text-gray-600 dark:text-gray-400">Loading preview...</p>
+            </div>
+          </div>
+        }>
+          <FilePreviewModal
+            isOpen={previewModal.isOpen}
+            onClose={closePreviewModal}
+            fileKey={previewModal.fileKey}
+            fileName={previewModal.fileName}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

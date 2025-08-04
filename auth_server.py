@@ -406,6 +406,15 @@ async def get_admin_stats():
         active_sessions = db_config.sessions.count_documents({"is_active": True})
         total_messages = db_config.messages.count_documents({})
 
+        # Get files count from database (same as admin files endpoint)
+        total_files = 0
+        try:
+            # Count active files from file_metadata collection
+            total_files = db_config.file_metadata.count_documents({"is_active": True})
+        except Exception as e:
+            api_logger.warning(f"Could not get files count from database: {e}")
+            total_files = 0
+
         # Get recent activity (last 24 hours)
         from datetime import timedelta
         yesterday = datetime.utcnow() - timedelta(days=1)
@@ -427,6 +436,7 @@ async def get_admin_stats():
                 "total_sessions": total_sessions,
                 "active_sessions": active_sessions,
                 "total_messages": total_messages,
+                "total_files": total_files,
                 "recent_sessions_24h": recent_sessions,
                 "recent_messages_24h": recent_messages
             }
@@ -531,6 +541,87 @@ async def delete_file_admin(file_key: str, user_id: str):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="File not found or access denied"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Delete error: {str(e)} ({processing_time:.2f}ms)")
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+
+@app.get("/admin/messages")
+async def get_all_messages():
+    """Get all messages for admin dashboard."""
+    api_logger.info("🌐 GET /admin/messages")
+    start_time = datetime.utcnow()
+
+    try:
+        db_config = get_db_config()
+
+        # Get all messages from all sessions
+        messages_cursor = db_config.messages.find({}).sort("timestamp", -1)
+        messages = []
+
+        for msg_doc in messages_cursor:
+            message_data = {
+                "message_id": msg_doc.get("message_id"),
+                "session_id": msg_doc.get("session_id"),
+                "user_id": msg_doc.get("user_id"),
+                "role": msg_doc.get("role"),
+                "content": msg_doc.get("content"),
+                "timestamp": msg_doc.get("timestamp"),
+                "metadata": msg_doc.get("metadata", {}),
+                "created_at": msg_doc.get("created_at"),
+                "updated_at": msg_doc.get("updated_at")
+            }
+            messages.append(message_data)
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.info(f"✅ Listed {len(messages)} messages ({processing_time:.2f}ms)")
+
+        return {
+            "success": True,
+            "messages": messages,
+            "total": len(messages)
+        }
+
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Error getting messages: {e} ({processing_time:.2f}ms)")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.delete("/admin/messages/{message_id}")
+async def delete_message_admin(message_id: str):
+    """Delete a message (admin endpoint)."""
+    api_logger.info(f"🌐 DELETE /admin/messages/{message_id}")
+    start_time = datetime.utcnow()
+
+    try:
+        db_config = get_db_config()
+
+        # Delete the message
+        result = db_config.messages.delete_one({"message_id": message_id})
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+        if result.deleted_count > 0:
+            api_logger.info(f"✅ Message deleted (admin): {message_id} ({processing_time:.2f}ms)")
+            return JSONResponse(content={
+                "success": True,
+                "message": "Message deleted successfully",
+                "message_id": message_id
+            })
+        else:
+            api_logger.error(f"❌ Delete failed: Message not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Message not found"
             )
 
     except HTTPException:
