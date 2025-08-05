@@ -6,6 +6,10 @@ import io
 import logging
 from datetime import datetime
 import mimetypes
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

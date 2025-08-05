@@ -9,6 +9,7 @@ export interface User {
   last_login?: string;
   role?: UserRole;
   preferences?: Record<string, any>;
+  number_upload_files?: number;
 }
 
 // Login request types
@@ -137,6 +138,7 @@ export interface AdminUser {
   has_password: boolean;
   role?: UserRole;
   updated_at?: string;
+  number_upload_files?: number;
 }
 
 export interface AdminSession {
@@ -170,6 +172,7 @@ export interface UserCreateRequest {
   password: string;
   is_active?: boolean;
   role?: UserRole;
+  number_upload_files?: number;
 }
 
 export interface UserUpdateRequest {
@@ -177,6 +180,7 @@ export interface UserUpdateRequest {
   email?: string;
   is_active?: boolean;
   role?: UserRole;
+  number_upload_files?: number;
 }
 
 export interface PasswordChangeRequest {

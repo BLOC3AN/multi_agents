@@ -143,6 +143,8 @@ const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ userId, className = '
       for (const file of missingFiles) {
         setEmbeddingFiles(prev => new Set(prev).add(file.file_key));
 
+        console.log(`🔄 Attempting to embed file: ${file.file_name} (key: ${file.file_key})`);
+
         const response = await fetch('/api/s3/embed-existing', {
           method: 'POST',
           headers: {
@@ -158,6 +160,10 @@ const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ userId, className = '
 
         if (!data.success) {
           console.error(`Failed to embed ${file.file_name}:`, data.error);
+          // Show user-friendly error message
+          setError(`Failed to embed ${file.file_name}: ${data.error || 'Unknown error'}`);
+        } else {
+          console.log(`✅ Successfully embedded ${file.file_name}`);
         }
 
         setEmbeddingFiles(prev => {

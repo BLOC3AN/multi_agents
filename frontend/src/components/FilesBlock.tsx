@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import FilePreviewModal from './FilePreviewModal';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FileItem {
   key: string;
@@ -45,6 +46,7 @@ interface FilesBlockProps {
 }
 
 const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collapsed = false, onExpandSidebar, sizes }) => {
+  const { user } = useAuth();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -126,11 +128,37 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
       return;
     }
 
-    // Check file limit
-    const maxFiles = 50;
-    if (files.length + fileList.length > maxFiles) {
-      setError(`Cannot upload more than ${maxFiles} files. You currently have ${files.length} files.`);
-      return;
+    // Get user-specific file limit (skip validation for super admin)
+    const isSuperAdmin = user?.role === 'super_admin';
+    const maxFiles = isSuperAdmin ? Infinity : (user?.number_upload_files || 3);
+
+    // Validate each file before upload (skip for super admin)
+    if (!isSuperAdmin) {
+      const allowedExtensions = ['.md', '.txt', '.docx', '.pdf'];
+      const maxFileSize = 25 * 1024 * 1024; // 25MB
+
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+
+        // Check file type
+        const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+        if (!allowedExtensions.includes(fileExtension)) {
+          setError(`File "${file.name}" has unsupported format. Only ${allowedExtensions.join(', ')} files are allowed.`);
+          return;
+        }
+
+        // Check file size
+        if (file.size > maxFileSize) {
+          setError(`File "${file.name}" is too large. Maximum size is 25MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)}MB.`);
+          return;
+        }
+      }
+
+      // Check file count limit
+      if (files.length + fileList.length > maxFiles) {
+        setError(`Cannot upload more than ${maxFiles} files. You currently have ${files.length} files.`);
+        return;
+      }
     }
 
     setUploading(true);
@@ -340,36 +368,53 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
           </h3>
         </div>
         <div className="flex items-center" style={{ gap: sizeValues.gap.small }}>
-          <div
-            className={`font-light ${
-              files.length >= 45
-                ? 'text-red-500 dark:text-red-400'
-                : files.length >= 40
-                ? 'text-yellow-500 dark:text-yellow-400'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-            style={{ fontSize: sizeValues.font.small }}
-            title={`${files.length} files uploaded, maximum 50 allowed`}
-          >
-            ({files.length}/50)
-          </div>
+          {(() => {
+            const isSuperAdmin = user?.role === 'super_admin';
+            const maxFiles = isSuperAdmin ? '∞' : (user?.number_upload_files || 3);
+            const maxFilesNum = isSuperAdmin ? Infinity : (user?.number_upload_files || 3);
+            const warningThreshold = isSuperAdmin ? Infinity : Math.max(1, maxFilesNum * 0.8);
+            const dangerThreshold = isSuperAdmin ? Infinity : Math.max(1, maxFilesNum * 0.9);
+
+            return (
+              <div
+                className={`font-light ${
+                  files.length >= dangerThreshold
+                    ? 'text-red-500 dark:text-red-400'
+                    : files.length >= warningThreshold
+                    ? 'text-yellow-500 dark:text-yellow-400'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+                style={{ fontSize: sizeValues.font.small }}
+                title={`${files.length} files uploaded, maximum ${maxFiles} allowed`}
+              >
+                ({files.length}/{maxFiles})
+              </div>
+            );
+          })()}
           {!isCollapsed && (
             <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (files.length < 50) {
-                    fileInputRef.current?.click();
-                  }
-                }}
-                disabled={uploading || files.length >= 50}
-                className={`rounded transition-colors ${
-                  files.length >= 50
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-                style={{ padding: sizeValues.padding.small }}
-                title={files.length >= 50 ? 'Maximum files reached (50/50)' : 'Upload files'}
+              {(() => {
+                const isSuperAdmin = user?.role === 'super_admin';
+                const maxFiles = isSuperAdmin ? Infinity : (user?.number_upload_files || 3);
+                const canUpload = isSuperAdmin || files.length < maxFiles;
+
+                return (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (canUpload) {
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    disabled={uploading || !canUpload}
+                    className={`rounded transition-colors ${
+                      !canUpload
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                    style={{ padding: sizeValues.padding.small }}
+                    title={!canUpload ? `Maximum files reached (${files.length}/${maxFiles})` : 'Upload files (md, txt, docx, pdf only, max 25MB each)'}
+
               >
                 <svg
                   style={{
@@ -385,7 +430,9 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
                   <polyline points="7,10 12,5 17,10" />
                   <line x1="12" y1="5" x2="12" y2="15" />
                 </svg>
-              </button>
+                  </button>
+                );
+              })()}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -519,7 +566,11 @@ const FilesBlock: React.FC<FilesBlockProps> = ({ className = "", userId, collaps
                 className="font-light"
                 style={{ fontSize: sizeValues.font.small }}
               >
-                Upload some files to get started (max 50 files)
+                {(() => {
+                  const isSuperAdmin = user?.role === 'super_admin';
+                  const maxFiles = isSuperAdmin ? '∞' : (user?.number_upload_files || 3);
+                  return `Upload some files to get started (max ${maxFiles} files, md/txt/docx/pdf only, 25MB each)`;
+                })()}
               </div>
             </div>
           </div>

@@ -393,6 +393,7 @@ class FileEmbeddingService:
                     user_id=user_id,
                     title=chunk_title,
                     source=chunk_source,
+                    file_name=filename,  # Original file name without prefixes/suffixes
                     category=doc_category,
                     language="vi",
                     summary=chunk_text[:200] + "..." if len(chunk_text) > 200 else chunk_text,
@@ -472,6 +473,7 @@ class FileEmbeddingService:
                 user_id=user_id,
                 title=filename,
                 source=file_key or filename,
+                file_name=filename,  # Original file name without prefixes/suffixes
                 category=doc_category,
                 language="vi",
                 summary=text[:200] + "..." if len(text) > 200 else text,

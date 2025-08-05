@@ -288,15 +288,25 @@ class DataSyncService:
         original_file_key = None
         original_file_name = None
 
-        # Extract from source (e.g., "file.pdf#chunk_0" -> "file.pdf")
+        # First priority: Use file_name field directly (new approach)
+        if qdrant_file.get("file_name"):
+            original_file_name = qdrant_file["file_name"]
+            # For file_key, try to extract from source or use file_name
+            if source and "#chunk_" in source:
+                original_file_key = source.split("#chunk_")[0]
+            else:
+                original_file_key = original_file_name
+            return original_file_key, original_file_name
+
+        # Fallback: Extract from source (e.g., "file.pdf#chunk_0" -> "file.pdf")
         if source and "#chunk_" in source:
             original_file_key = source.split("#chunk_")[0]
 
-        # Extract from title (e.g., "file.pdf (Part 1/1)" -> "file.pdf")
+        # Fallback: Extract from title (e.g., "file.pdf (Part 1/1)" -> "file.pdf")
         if title and " (Part " in title:
             original_file_name = title.split(" (Part ")[0]
 
-        # Try to get from metadata.parent_file
+        # Fallback: Try to get from metadata.parent_file (legacy)
         metadata = qdrant_file.get("metadata", {})
         if metadata.get("parent_file"):
             original_file_name = metadata["parent_file"]

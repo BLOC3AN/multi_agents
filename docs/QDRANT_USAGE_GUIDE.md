@@ -40,14 +40,19 @@ pip install qdrant-client>=1.7.0
   },
   "payload": {
     "text": "Nội dung đoạn văn bản hoặc câu hỏi",
-    "title": "Tiêu đề (nếu có)",
-    "source": "tên file hoặc nguồn dữ liệu", 
+    "user_id": "user123",  // Required for file isolation
+    "title": "Tiêu đề (có thể có prefix/suffix cho chunks)",
+    "source": "file_key hoặc nguồn dữ liệu (có thể có #chunk_X)",
+    "file_name": "tên_file_gốc.pdf",  // Original file name without prefixes/suffixes
     "page": 1,
     "timestamp": "2025-08-04T15:30:00Z",
     "metadata": {
-      "author": "Tên tác giả",
       "category": "Loại tài liệu",
-      "language": "vi"
+      "language": "vi",
+      "chunk_index": 0,  // For chunked files
+      "total_chunks": 5,  // For chunked files
+      "is_chunk": true,  // For chunked files
+      "parent_file": "tên_file_gốc.pdf"  // Legacy field
     },
     "extra": {
       "summary": "Tóm tắt ngắn gọn nếu có",
@@ -78,9 +83,10 @@ qdrant = get_qdrant_config()
 # Tạo document
 doc = create_vector_document(
     text="Python là một ngôn ngữ lập trình mạnh mẽ",
+    user_id="user123",
     title="Giới thiệu Python",
     source="python_tutorial.md",
-    author="Lập trình viên",
+    file_name="python_tutorial.md",  # Original file name
     category="programming",
     language="vi"
 )
@@ -226,8 +232,10 @@ python examples/qdrant_usage_example.py
 - Normalize vectors nếu cần thiết
 
 ### 2. Document Structure
-- Luôn cung cấp `text` và `title` có ý nghĩa
-- Sử dụng `source` để track nguồn gốc
+- Luôn cung cấp `text`, `user_id` và `file_name` có ý nghĩa
+- Sử dụng `file_name` để track file gốc (không có prefix/suffix)
+- Sử dụng `source` để track file key hoặc nguồn chi tiết
+- Sử dụng `title` cho display (có thể có prefix/suffix cho chunks)
 - Thêm metadata phù hợp cho filtering
 
 ### 3. Search Optimization

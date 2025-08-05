@@ -66,7 +66,7 @@ const Logo: React.FC<LogoProps> = ({
             className="font-bold text-gray-900 dark:text-white"
             style={{ fontSize: sizeStyles.titleSize }}
           >
-            Multi-Agent
+            Agent
           </div>
           <div 
             className="text-gray-500 dark:text-gray-400"

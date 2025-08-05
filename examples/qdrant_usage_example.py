@@ -104,7 +104,7 @@ def example_search_operations(stored_docs):
         qdrant = get_qdrant_config()
         
         # Example 1: Search with exact document vector
-        print("\n1️⃣ Exact Match Search:")
+        print("\n 1️⃣ Exact Match Search:")
         doc, vector = stored_docs[0]
         results = qdrant.search_similar(
             query_vector=vector,

@@ -102,6 +102,7 @@ class UserCreateRequest(BaseModel):
     password: str
     is_active: bool = True
     role: str = "user"  # user, editor
+    number_upload_files: int = 3
 
 
 class UserUpdateRequest(BaseModel):
@@ -109,6 +110,7 @@ class UserUpdateRequest(BaseModel):
     email: Optional[str] = None
     is_active: Optional[bool] = None
     role: Optional[str] = None
+    number_upload_files: Optional[int] = None
 
 
 class PasswordChangeRequest(BaseModel):
@@ -389,7 +391,8 @@ async def get_all_users(collection: Optional[str] = None):
                     "last_login": user_doc.get("last_login"),
                     "has_password": bool(user_doc.get("password_hash")),
                     "role": user_doc.get("role", "user"),  # Default to "user" if not set
-                    "updated_at": user_doc.get("updated_at")
+                    "updated_at": user_doc.get("updated_at"),
+                    "number_upload_files": user_doc.get("number_upload_files", 3)
                 }
                 users.append(user_data)
 
@@ -740,10 +743,17 @@ async def create_user(request: UserCreateRequest):
             )
 
         # Validate role
-        if request.role not in ["user", "admin"]:
+        if request.role not in ["user", "editor"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Role must be 'user' or 'admin'"
+                detail="Role must be 'user' or 'editor'"
+            )
+
+        # Validate number_upload_files
+        if request.number_upload_files < 1 or request.number_upload_files > 100:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Number of upload files must be between 1 and 100"
             )
 
         # Hash password
@@ -762,7 +772,8 @@ async def create_user(request: UserCreateRequest):
             password_hash=password_hash,
             is_active=request.is_active,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
+            number_upload_files=request.number_upload_files
         )
 
         # Add role and original password to user data
@@ -789,7 +800,8 @@ async def create_user(request: UserCreateRequest):
                 "is_active": user_doc["is_active"],
                 "role": user_doc["role"],
                 "created_at": user_doc["created_at"],
-                "has_password": True
+                "has_password": True,
+                "number_upload_files": user_doc["number_upload_files"]
             }
 
             return UserResponse(
@@ -934,10 +946,16 @@ async def update_user(user_id: str, request: UserUpdateRequest):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Role must be 'user' or 'editor'"
                 )
-
-
-
             update_data["role"] = request.role
+
+        if request.number_upload_files is not None:
+            # Validate number_upload_files
+            if request.number_upload_files < 1 or request.number_upload_files > 100:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Number of upload files must be between 1 and 100"
+                )
+            update_data["number_upload_files"] = request.number_upload_files
 
         # Update user
         result = db_config.users.update_one(
@@ -1583,6 +1601,54 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
         file_content = await file.read()
         file_size = len(file_content)
         filename = file.filename or "unnamed_file"
+
+        # Get user info for role-based validation
+        user_doc = None
+        is_super_admin = False
+
+        # Check in users collection first
+        if DATABASE_AVAILABLE:
+            user_doc = db_config.users.find_one({"user_id": user_id})
+            if not user_doc:
+                # Check in admins collection
+                admin_doc = db_config.admins.find_one({"admin_id": user_id})
+                if admin_doc:
+                    user_doc = admin_doc
+                    is_super_admin = admin_doc.get("role") == "super_admin"
+
+        # File validation (skip for super admin)
+        if not is_super_admin:
+            # 1. File type validation
+            allowed_extensions = ['.md', '.txt', '.docx', '.pdf']
+            file_extension = None
+            if '.' in filename:
+                file_extension = '.' + filename.rsplit('.', 1)[1].lower()
+
+            if file_extension not in allowed_extensions:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File type not allowed. Only {', '.join(allowed_extensions)} files are supported."
+                )
+
+            # 2. File size validation (25MB = 25 * 1024 * 1024 bytes)
+            max_file_size = 25 * 1024 * 1024  # 25MB
+            if file_size > max_file_size:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File size too large. Maximum allowed size is 25MB. Your file is {file_size / (1024 * 1024):.1f}MB."
+                )
+
+            # 3. File count validation
+            if FILE_MANAGER_AVAILABLE and user_doc:
+                file_manager = get_file_manager()
+                current_count = file_manager.get_user_file_count(user_id)
+                max_files = user_doc.get("number_upload_files", 3)  # Default to 3
+
+                if current_count >= max_files:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"File upload limit reached. You can upload maximum {max_files} files. Current: {current_count}/{max_files}."
+                    )
 
         # Use FileManager for user-specific file management
         if FILE_MANAGER_AVAILABLE:

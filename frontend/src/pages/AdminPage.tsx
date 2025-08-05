@@ -91,6 +91,9 @@ const AdminPage: React.FC = () => {
   // Check if user is admin (including super_admin)
   const isAdmin = user?.role === 'editor' || user?.role === 'super_admin';
 
+  // Check if user is super admin (for admin management)
+  const isSuperAdmin = user?.role === 'super_admin';
+
   // Handle navigation back to chat
   const handleBackToChat = () => {
     navigate('/chat');
@@ -917,39 +920,26 @@ const AdminPage: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                  <button
-                                    onClick={() => openEditUserModal(admin)}
-                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800 transition-colors"
-                                    title="Edit Admin"
-                                  >
-                                    <span className="sm:hidden">✏️</span>
-                                    <span className="hidden sm:inline">✏️ Edit</span>
-                                  </button>
-                                  <button
-                                    onClick={() => openChangePasswordModal(admin)}
-                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-yellow-700 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 dark:bg-yellow-900 dark:text-yellow-200 dark:hover:bg-yellow-800 transition-colors"
-                                    title="Change Password"
-                                  >
-                                    <span className="sm:hidden">🔑</span>
-                                    <span className="hidden sm:inline">🔑 Password</span>
-                                  </button>
-                                  <button
-                                    onClick={() => openUserHistoryModal(admin)}
-                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800 transition-colors"
-                                    title="View History"
-                                  >
-                                    <span className="sm:hidden">📊</span>
-                                    <span className="hidden sm:inline">📊 History</span>
-                                  </button>
-                                  {/* Admin users cannot be deleted for security reasons */}
-                                  <button
-                                    disabled
-                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-gray-400 bg-gray-100 cursor-not-allowed dark:bg-gray-800 dark:text-gray-500"
-                                    title="Admin users cannot be deleted"
-                                  >
-                                    <span className="sm:hidden">🔒</span>
-                                    <span className="hidden sm:inline">🔒 Protected</span>
-                                  </button>
+                                  {isSuperAdmin ? (
+                                    <button
+                                      onClick={() => openEditModal(admin)}
+                                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800 transition-colors"
+                                      title="Edit Admin"
+                                    >
+                                      <span className="sm:hidden">✏️</span>
+                                      <span className="hidden sm:inline">✏️ Edit</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      disabled
+                                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-gray-400 bg-gray-100 cursor-not-allowed dark:bg-gray-800 dark:text-gray-500"
+                                      title="Only super admin can edit admin accounts"
+                                    >
+                                      <span className="sm:hidden">🔒</span>
+                                      <span className="hidden sm:inline">🔒 Restricted</span>
+                                    </button>
+                                  )}
+
                                 </div>
                               </div>
                             </li>

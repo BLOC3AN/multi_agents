@@ -98,13 +98,36 @@ class FileManager:
     def check_file_limit(self, user_id: str) -> Dict[str, Any]:
         """Check if user has reached file limit."""
         current_count = self.get_user_file_count(user_id)
-        
+
+        # Get user-specific file limit
+        max_allowed = self.get_user_file_limit(user_id)
+
         return {
             "current_count": current_count,
-            "max_allowed": self.MAX_FILES_PER_USER,
-            "can_upload": current_count < self.MAX_FILES_PER_USER,
-            "remaining": max(0, self.MAX_FILES_PER_USER - current_count)
+            "max_allowed": max_allowed,
+            "can_upload": current_count < max_allowed,
+            "remaining": max(0, max_allowed - current_count)
         }
+
+    def get_user_file_limit(self, user_id: str) -> int:
+        """Get file upload limit for a specific user."""
+        try:
+            # Check if user is super admin (no limits)
+            if self.db_config:
+                admin_doc = self.db_config.admins.find_one({"admin_id": user_id})
+                if admin_doc and admin_doc.get("role") == "super_admin":
+                    return float('inf')  # No limit for super admin
+
+                # Check user document for custom limit
+                user_doc = self.db_config.users.find_one({"user_id": user_id})
+                if user_doc:
+                    return user_doc.get("number_upload_files", 3)  # Default to 3
+
+            # Fallback to default
+            return 3
+        except Exception as e:
+            print(f"⚠️ Error getting user file limit: {e}")
+            return 3
     
     def cleanup_old_files(self, user_id: str, keep_count: int = None) -> List[str]:
         """Remove oldest files to make room for new uploads."""
@@ -167,8 +190,19 @@ class FileManager:
         query = {"file_key": file_key, "is_active": True}
         if user_id:
             query["user_id"] = user_id
-        
+
+        print(f"🔍 Querying file metadata with: {query}")
         file_doc = self.file_collection.find_one(query)
+
+        if not file_doc and user_id:
+            # Try to find any file with this key (debug info)
+            debug_query = {"file_key": file_key}
+            debug_doc = self.file_collection.find_one(debug_query)
+            if debug_doc:
+                print(f"🔍 File exists but belongs to different user: {debug_doc.get('user_id')} (requested: {user_id})")
+            else:
+                print(f"🔍 File key not found at all: {file_key}")
+
         return file_doc
     
     def delete_file(self, file_key: str, user_id: str) -> bool:
@@ -325,12 +359,22 @@ class FileManager:
                 }
 
             # Get file metadata
+            print(f"🔍 Looking for file metadata: file_key={file_key}, user_id={user_id}")
             file_doc = self.get_file_metadata(file_key, user_id)
             if not file_doc:
-                return {
-                    "success": False,
-                    "error": "File not found or access denied"
-                }
+                # Try to find file without user restriction (for global access)
+                print(f"🔍 Trying to find file without user restriction...")
+                file_doc = self.file_collection.find_one({"file_key": file_key, "is_active": True})
+                if not file_doc:
+                    print(f"❌ File metadata not found for: {file_key}")
+                    return {
+                        "success": False,
+                        "error": f"File '{file_key}' not found in database. The file may have been deleted or the file key is incorrect."
+                    }
+                else:
+                    print(f"✅ Found file metadata (global): {file_doc.get('file_name')} (user: {file_doc.get('user_id')})")
+            else:
+                print(f"✅ Found file metadata: {file_doc.get('file_name')} (size: {file_doc.get('file_size')})")
 
             # Check if already embedded
             if self.embedding_service.check_file_embedded(user_id, file_doc["file_name"], file_key):
@@ -347,11 +391,13 @@ class FileManager:
                     "error": "S3 manager not available"
                 }
 
+            print(f"📥 Attempting to download file: {file_key}")
             download_result = self.s3_manager.download_file(file_key)
             if not download_result["success"]:
+                print(f"❌ S3 download failed for {file_key}: {download_result.get('error', 'Unknown error')}")
                 return {
                     "success": False,
-                    "error": f"Failed to download file: {download_result['error']}"
+                    "error": f"Failed to download file from S3: {download_result.get('error', 'Unknown error')}"
                 }
 
             # Embed the file

@@ -23,6 +23,7 @@ class VectorDocument:
     user_id: str  # Required user_id for file isolation
     title: Optional[str] = None
     source: Optional[str] = None
+    file_name: Optional[str] = None  # Original file name without prefixes/suffixes
     page: Optional[int] = None
     timestamp: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -52,6 +53,7 @@ class VectorDocument:
             "user_id": self.user_id,
             "title": self.title,
             "source": self.source,
+            "file_name": self.file_name,
             "page": self.page,
             "timestamp": self.timestamp,
             "metadata": self.metadata,
@@ -67,6 +69,7 @@ class VectorDocument:
             user_id=payload.get("user_id", ""),
             title=payload.get("title"),
             source=payload.get("source"),
+            file_name=payload.get("file_name"),
             page=payload.get("page"),
             timestamp=payload.get("timestamp"),
             metadata=payload.get("metadata", {}),
@@ -171,6 +174,14 @@ class QdrantConfig:
                 field_schema=models.PayloadSchemaType.KEYWORD
             )
             print("✅ Created index for source")
+
+            # Create index for file_name field
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="file_name",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            print("✅ Created index for file_name")
 
             # Create index for metadata.category
             self.client.create_payload_index(
@@ -384,16 +395,16 @@ class QdrantConfig:
             return None
 
     def _check_file_exact_match(self, user_id: str, file_name: str, source: str = None) -> Optional[VectorDocument]:
-        """Check for exact file match."""
+        """Check for exact file match using file_name field."""
         try:
-            # Build filter conditions for exact match
+            # Build filter conditions for exact match using file_name field
             must_conditions = [
                 {
                     "key": "user_id",
                     "match": {"value": user_id}
                 },
                 {
-                    "key": "title",
+                    "key": "file_name",
                     "match": {"value": file_name}
                 }
             ]
@@ -430,7 +441,37 @@ class QdrantConfig:
     def _check_chunked_file_exists(self, user_id: str, file_name: str, source: str = None) -> Optional[VectorDocument]:
         """Check for chunked file existence (for PDF files)."""
         try:
-            # Method 1: Check for chunks with parent_file metadata
+            # Method 1: Check using file_name field directly (new approach)
+            try:
+                must_conditions = [
+                    {
+                        "key": "user_id",
+                        "match": {"value": user_id}
+                    },
+                    {
+                        "key": "file_name",
+                        "match": {"value": file_name}
+                    }
+                ]
+
+                filter_conditions = {"must": must_conditions}
+
+                results, _ = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=models.Filter(**filter_conditions),
+                    limit=1,
+                    with_payload=True,
+                    with_vectors=False
+                )
+
+                if results:
+                    point = results[0]
+                    return VectorDocument.from_payload(point.id, point.payload)
+
+            except Exception as e:
+                print(f"⚠️ Method 1 (file_name) failed: {e}")
+
+            # Method 2: Fallback - Check for chunks with parent_file metadata (legacy)
             try:
                 must_conditions = [
                     {
@@ -458,9 +499,9 @@ class QdrantConfig:
                     return VectorDocument.from_payload(point.id, point.payload)
 
             except Exception as e:
-                print(f"⚠️ Method 1 failed: {e}")
+                print(f"⚠️ Method 2 (parent_file) failed: {e}")
 
-            # Method 2: Check for source patterns like "filename#chunk_X"
+            # Method 3: Check for source patterns like "filename#chunk_X"
             if source:
                 try:
                     must_conditions = [
@@ -508,49 +549,147 @@ class QdrantConfig:
 
     def delete_user_file_vectors(self, user_id: str, file_name: str, source: str = None) -> bool:
         """
-        Delete all vectors for a specific user file.
+        Delete all vectors for a specific user file using file_name field.
 
         Args:
             user_id: User ID
-            file_name: File name to delete
+            file_name: File name to delete (original file name without prefixes/suffixes)
             source: Optional source for more specific matching
 
         Returns:
             bool: Success status
         """
         try:
-            # Build filter conditions
-            must_conditions = [
-                {
-                    "key": "user_id",
-                    "match": {"value": user_id}
-                },
-                {
-                    "key": "title",
-                    "match": {"value": file_name}
-                }
-            ]
+            deleted_count = 0
 
-            if source:
-                must_conditions.append({
-                    "key": "source",
-                    "match": {"value": source}
-                })
+            # Method 1: Delete using file_name field (new approach)
+            try:
+                must_conditions = [
+                    {
+                        "key": "user_id",
+                        "match": {"value": user_id}
+                    },
+                    {
+                        "key": "file_name",
+                        "match": {"value": file_name}
+                    }
+                ]
 
-            filter_conditions = {
-                "must": must_conditions
-            }
+                if source:
+                    must_conditions.append({
+                        "key": "source",
+                        "match": {"value": source}
+                    })
 
-            # Delete points with filter
-            self.client.delete(
-                collection_name=self.collection_name,
-                points_selector=models.FilterSelector(
-                    filter=models.Filter(**filter_conditions)
+                filter_conditions = {"must": must_conditions}
+
+                # Count before deletion for logging
+                count_result, _ = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=models.Filter(**filter_conditions),
+                    limit=1,
+                    with_payload=False,
+                    with_vectors=False
                 )
-            )
 
-            print(f"✅ Deleted vectors for user {user_id}, file: {file_name}")
-            return True
+                if count_result:
+                    # Delete points with filter
+                    self.client.delete(
+                        collection_name=self.collection_name,
+                        points_selector=models.FilterSelector(
+                            filter=models.Filter(**filter_conditions)
+                        )
+                    )
+                    deleted_count += len(count_result)
+                    print(f"✅ Deleted {len(count_result)} vectors using file_name field")
+
+            except Exception as e:
+                print(f"⚠️ Method 1 (file_name) failed: {e}")
+
+            # Method 2: Fallback - Delete using title field (legacy)
+            try:
+                must_conditions = [
+                    {
+                        "key": "user_id",
+                        "match": {"value": user_id}
+                    },
+                    {
+                        "key": "title",
+                        "match": {"value": file_name}
+                    }
+                ]
+
+                if source:
+                    must_conditions.append({
+                        "key": "source",
+                        "match": {"value": source}
+                    })
+
+                filter_conditions = {"must": must_conditions}
+
+                # Count before deletion for logging
+                count_result, _ = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=models.Filter(**filter_conditions),
+                    limit=1,
+                    with_payload=False,
+                    with_vectors=False
+                )
+
+                if count_result:
+                    # Delete points with filter
+                    self.client.delete(
+                        collection_name=self.collection_name,
+                        points_selector=models.FilterSelector(
+                            filter=models.Filter(**filter_conditions)
+                        )
+                    )
+                    deleted_count += len(count_result)
+                    print(f"✅ Deleted {len(count_result)} vectors using title field (legacy)")
+
+            except Exception as e:
+                print(f"⚠️ Method 2 (title) failed: {e}")
+
+            # Method 3: Delete chunked files using metadata.parent_file (legacy)
+            try:
+                must_conditions = [
+                    {
+                        "key": "user_id",
+                        "match": {"value": user_id}
+                    },
+                    {
+                        "key": "metadata.parent_file",
+                        "match": {"value": file_name}
+                    }
+                ]
+
+                filter_conditions = {"must": must_conditions}
+
+                # Count before deletion for logging
+                count_result, _ = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=models.Filter(**filter_conditions),
+                    limit=1,
+                    with_payload=False,
+                    with_vectors=False
+                )
+
+                if count_result:
+                    # Delete points with filter
+                    self.client.delete(
+                        collection_name=self.collection_name,
+                        points_selector=models.FilterSelector(
+                            filter=models.Filter(**filter_conditions)
+                        )
+                    )
+                    deleted_count += len(count_result)
+                    print(f"✅ Deleted {len(count_result)} vectors using parent_file field (legacy)")
+
+            except Exception as e:
+                print(f"⚠️ Method 3 (parent_file) failed: {e}")
+
+            print(f"✅ Total deleted vectors for user {user_id}, file: {file_name} = {deleted_count}")
+            return deleted_count > 0
 
         except Exception as e:
             print(f"❌ Failed to delete file vectors: {e}")
@@ -631,6 +770,7 @@ def create_vector_document(text: str,
                           user_id: str,
                           title: str = None,
                           source: str = None,
+                          file_name: str = None,
                           page: int = None,
                           category: str = "document",
                           language: str = "vi",
@@ -645,6 +785,7 @@ def create_vector_document(text: str,
         user_id: User ID for file isolation
         title: Document title
         source: Source file or origin
+        file_name: Original file name without prefixes/suffixes
         page: Page number if applicable
         category: Document category
         language: Document language
@@ -674,6 +815,7 @@ def create_vector_document(text: str,
         user_id=user_id,
         title=title,
         source=source,
+        file_name=file_name,
         page=page,
         metadata=metadata,
         extra=extra

@@ -40,6 +40,7 @@ class User:
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
     preferences: Optional[Dict[str, Any]] = None
+    number_upload_files: int = 3  # Default file upload limit
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for MongoDB storage."""

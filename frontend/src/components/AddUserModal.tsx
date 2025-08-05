@@ -21,6 +21,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
     password: '',
     is_active: true,
     role: 'user',
+    number_upload_files: 3,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -45,6 +46,12 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
       newErrors.email = 'Please enter a valid email address';
     }
 
+    if (formData.number_upload_files !== undefined) {
+      if (formData.number_upload_files < 1 || formData.number_upload_files > 100) {
+        newErrors.number_upload_files = 'Number of upload files must be between 1 and 100';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -66,6 +73,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
         password: '',
         is_active: true,
         role: 'user',
+        number_upload_files: 3,
       });
       setErrors({});
       onClose();
@@ -225,6 +233,31 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                 <option value="user">User</option>
                 <option value="editor">Editor</option>
               </select>
+            </div>
+
+            {/* Number of Upload Files */}
+            <div>
+              <label htmlFor="number_upload_files" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Max Upload Files
+              </label>
+              <input
+                type="number"
+                id="number_upload_files"
+                min="1"
+                max="100"
+                value={formData.number_upload_files}
+                onChange={(e) => handleInputChange('number_upload_files', parseInt(e.target.value) || 3)}
+                className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                  errors.number_upload_files ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''
+                }`}
+                placeholder="3"
+              />
+              {errors.number_upload_files && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.number_upload_files}</p>
+              )}
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Maximum number of files this user can upload (1-100)
+              </p>
             </div>
 
             {/* Active Status */}
