@@ -237,14 +237,29 @@ class FileManager:
             embedding_result = None
             if file_content and self.embedding_service and self.embedding_service.is_available():
                 try:
-                    embedding_result = self.embedding_service.embed_file(
-                        user_id=user_id,
-                        filename=file_name,
-                        file_content=file_content,
-                        content_type=content_type,
-                        file_key=file_key,
-                        metadata={"file_id": file_id, "file_size": file_size}
-                    )
+                    # Use chunked embedding for PDF files (better quality)
+                    if content_type == 'application/pdf' or file_name.lower().endswith('.pdf'):
+                        print(f"📄 Using chunked embedding for PDF: {file_name}")
+                        embedding_ids = self.embedding_service.embed_file_chunked(
+                            user_id=user_id,
+                            filename=file_name,
+                            file_content=file_content,
+                            content_type=content_type,
+                            file_key=file_key,
+                            metadata={"file_id": file_id, "file_size": file_size}
+                        )
+                        if embedding_ids:
+                            embedding_result = f"chunked_{len(embedding_ids)}_parts"
+                    else:
+                        # Use regular embedding for other file types
+                        embedding_result = self.embedding_service.embed_file(
+                            user_id=user_id,
+                            filename=file_name,
+                            file_content=file_content,
+                            content_type=content_type,
+                            file_key=file_key,
+                            metadata={"file_id": file_id, "file_size": file_size}
+                        )
                 except Exception as e:
                     print(f"⚠️ Failed to embed file {file_name}: {e}")
 
@@ -340,29 +355,62 @@ class FileManager:
                 }
 
             # Embed the file
-            embedding_result = self.embedding_service.embed_file(
-                user_id=user_id,
-                filename=file_doc["file_name"],
-                file_content=download_result["file_data"],
-                content_type=file_doc["content_type"],
-                file_key=file_key,
-                metadata={
-                    "file_id": file_doc["file_id"],
-                    "file_size": file_doc["file_size"]
-                }
-            )
+            file_name = file_doc["file_name"]
+            content_type = file_doc["content_type"]
+            file_content = download_result["file_data"]
 
-            if embedding_result:
-                return {
-                    "success": True,
-                    "message": "File embedded successfully",
-                    "embedding_id": embedding_result
-                }
+            # Use chunked embedding for PDF files
+            if content_type == 'application/pdf' or file_name.lower().endswith('.pdf'):
+                print(f"📄 Using chunked embedding for existing PDF: {file_name}")
+                embedding_ids = self.embedding_service.embed_file_chunked(
+                    user_id=user_id,
+                    filename=file_name,
+                    file_content=file_content,
+                    content_type=content_type,
+                    file_key=file_key,
+                    metadata={
+                        "file_id": file_doc["file_id"],
+                        "file_size": file_doc["file_size"]
+                    }
+                )
+
+                if embedding_ids:
+                    return {
+                        "success": True,
+                        "message": f"PDF embedded successfully in {len(embedding_ids)} chunks",
+                        "embedding_id": f"chunked_{len(embedding_ids)}_parts",
+                        "chunk_count": len(embedding_ids)
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": "Failed to embed PDF file"
+                    }
             else:
-                return {
-                    "success": False,
-                    "error": "Failed to embed file"
-                }
+                # Use regular embedding for other file types
+                embedding_result = self.embedding_service.embed_file(
+                    user_id=user_id,
+                    filename=file_name,
+                    file_content=file_content,
+                    content_type=content_type,
+                    file_key=file_key,
+                    metadata={
+                        "file_id": file_doc["file_id"],
+                        "file_size": file_doc["file_size"]
+                    }
+                )
+
+                if embedding_result:
+                    return {
+                        "success": True,
+                        "message": "File embedded successfully",
+                        "embedding_id": embedding_result
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": "Failed to embed file"
+                    }
 
         except Exception as e:
             return {

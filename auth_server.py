@@ -101,7 +101,7 @@ class UserCreateRequest(BaseModel):
     email: Optional[str] = None
     password: str
     is_active: bool = True
-    role: str = "user"  # user, admin
+    role: str = "user"  # user, editor
 
 
 class UserUpdateRequest(BaseModel):
@@ -113,6 +113,10 @@ class UserUpdateRequest(BaseModel):
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
+    new_password: str
+
+
+class PasswordResetRequest(BaseModel):
     new_password: str
 
 
@@ -135,7 +139,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def is_admin_user(user_id: str) -> bool:
-    """Check if a user has admin role."""
+    """Check if a user has editor role."""
     if not DATABASE_AVAILABLE or not db_config:
         return False
 
@@ -143,7 +147,7 @@ def is_admin_user(user_id: str) -> bool:
     if not user_doc:
         return False
 
-    return user_doc.get("role") == "admin"
+    return user_doc.get("role") == "editor"
 
 
 @app.get("/health")
@@ -178,8 +182,33 @@ async def login(request: LoginRequest):
                 detail="User ID and password are required"
             )
         
-        # Find user in database
+        # Find user in database (check both users and admins collections)
         user_doc = db_config.users.find_one({"user_id": request.user_id})
+        is_admin_user = False
+
+        # If not found in users, check admins collection
+        if not user_doc:
+            admin_doc = db_config.admins.find_one({"admin_id": request.user_id})
+            if admin_doc:
+                # Convert admin doc to user doc format for consistency
+                user_doc = {
+                    "user_id": admin_doc.get("admin_id"),
+                    "display_name": admin_doc.get("display_name"),
+                    "email": admin_doc.get("email"),
+                    "password_hash": admin_doc.get("password_hash"),
+                    "is_active": admin_doc.get("is_active", True),
+                    "role": admin_doc.get("role", "admin"),
+                    "created_at": admin_doc.get("created_at"),
+                    "last_login": admin_doc.get("last_login"),
+                    # Admin-specific permissions
+                    "can_manage_users": admin_doc.get("can_manage_users", True),
+                    "can_manage_system": admin_doc.get("can_manage_system", True),
+                    "can_view_logs": admin_doc.get("can_view_logs", True),
+                    "can_delete_users": admin_doc.get("can_delete_users", True),
+                    "can_manage_admins": admin_doc.get("can_manage_admins", True),
+                    "can_access_all_data": admin_doc.get("can_access_all_data", True),
+                }
+                is_admin_user = True
 
         if not user_doc:
             api_logger.warning(f"🔐 Login attempt for non-existent user: {request.user_id}")
@@ -190,7 +219,7 @@ async def login(request: LoginRequest):
 
         # Determine user role
         user_role = user_doc.get("role", "user")
-        is_admin = user_role == "admin"
+        is_admin = user_role == "editor"
         
         # Check if user is active
         if not user_doc.get("is_active", True):
@@ -216,11 +245,17 @@ async def login(request: LoginRequest):
                 detail="Invalid user ID or password"
             )
 
-        # Update last login
-        db_config.users.update_one(
-            {"user_id": request.user_id},
-            {"$set": {"last_login": datetime.utcnow()}}
-        )
+        # Update last login in appropriate collection
+        if is_admin_user:
+            db_config.admins.update_one(
+                {"admin_id": request.user_id},
+                {"$set": {"last_login": datetime.utcnow()}}
+            )
+        else:
+            db_config.users.update_one(
+                {"user_id": request.user_id},
+                {"$set": {"last_login": datetime.utcnow()}}
+            )
         
         # Prepare user data (exclude sensitive fields)
         user_data = {
@@ -232,6 +267,17 @@ async def login(request: LoginRequest):
             "created_at": user_doc.get("created_at"),
             "last_login": datetime.utcnow().isoformat(),
         }
+
+        # Add admin permissions if user is admin
+        if is_admin_user:
+            user_data.update({
+                "can_manage_users": user_doc.get("can_manage_users", True),
+                "can_manage_system": user_doc.get("can_manage_system", True),
+                "can_view_logs": user_doc.get("can_view_logs", True),
+                "can_delete_users": user_doc.get("can_delete_users", True),
+                "can_manage_admins": user_doc.get("can_manage_admins", True),
+                "can_access_all_data": user_doc.get("can_access_all_data", True),
+            })
         
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
         api_logger.info(f"✅ Successful login for {user_role}: {request.user_id} ({processing_time:.2f}ms)")
@@ -281,8 +327,8 @@ async def get_current_user():
 
 # Admin endpoints
 @app.get("/admin/users")
-async def get_all_users():
-    """Get all users for admin dashboard."""
+async def get_all_users(collection: Optional[str] = None):
+    """Get all users for admin dashboard. Use collection=admins to get from admins collection."""
     api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
@@ -294,28 +340,58 @@ async def get_all_users():
                 detail="Database service unavailable"
             )
 
-        # Get all users
-        users_cursor = db_config.users.find({})
-        users = []
+        # Choose collection based on parameter
+        if collection == "admins":
+            # Get from admins collection (super_admin users)
+            users_cursor = db_config.admins.find({})
+            users = []
 
-        for user_doc in users_cursor:
-            # Hide system emails
-            display_email = user_doc.get("email")
-            if display_email and display_email.endswith("@system.local"):
-                display_email = None
+            for admin_doc in users_cursor:
+                # Convert admin doc to user format
+                user_data = {
+                    "user_id": admin_doc.get("admin_id"),
+                    "username": admin_doc.get("admin_id"),
+                    "display_name": admin_doc.get("display_name"),
+                    "email": admin_doc.get("email"),
+                    "is_active": admin_doc.get("is_active", True),
+                    "created_at": admin_doc.get("created_at"),
+                    "last_login": admin_doc.get("last_login"),
+                    "has_password": bool(admin_doc.get("password_hash")),
+                    "role": admin_doc.get("role", "super_admin"),
+                    "updated_at": admin_doc.get("updated_at"),
+                    # Super admin permissions
+                    "can_manage_users": admin_doc.get("can_manage_users", True),
+                    "can_manage_system": admin_doc.get("can_manage_system", True),
+                    "can_view_logs": admin_doc.get("can_view_logs", True),
+                    "can_delete_users": admin_doc.get("can_delete_users", True),
+                    "can_manage_admins": admin_doc.get("can_manage_admins", True),
+                    "can_access_all_data": admin_doc.get("can_access_all_data", True),
+                }
+                users.append(user_data)
+        else:
+            # Get from users collection (regular users)
+            users_cursor = db_config.users.find({})
+            users = []
 
-            user_data = {
-                "user_id": user_doc["user_id"],
-                "display_name": user_doc.get("display_name", user_doc["user_id"]),
-                "email": display_email,
-                "is_active": user_doc.get("is_active", True),
-                "created_at": user_doc.get("created_at"),
-                "last_login": user_doc.get("last_login"),
-                "has_password": bool(user_doc.get("password_hash")),
-                "role": user_doc.get("role", "user"),  # Default to "user" if not set
-                "updated_at": user_doc.get("updated_at")
-            }
-            users.append(user_data)
+            for user_doc in users_cursor:
+                # Hide system emails
+                display_email = user_doc.get("email")
+                if display_email and display_email.endswith("@system.local"):
+                    display_email = None
+
+                user_data = {
+                    "user_id": user_doc["user_id"],
+                    "username": user_doc.get("user_id"),
+                    "display_name": user_doc.get("display_name", user_doc["user_id"]),
+                    "email": display_email,
+                    "is_active": user_doc.get("is_active", True),
+                    "created_at": user_doc.get("created_at"),
+                    "last_login": user_doc.get("last_login"),
+                    "has_password": bool(user_doc.get("password_hash")),
+                    "role": user_doc.get("role", "user"),  # Default to "user" if not set
+                    "updated_at": user_doc.get("updated_at")
+                }
+                users.append(user_data)
 
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
         api_logger.log_response(200, processing_time)
@@ -334,6 +410,7 @@ async def get_all_users():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
+
 
 
 @app.get("/admin/sessions")
@@ -738,8 +815,8 @@ async def create_user(request: UserCreateRequest):
 
 
 @app.delete("/admin/users/{user_id}", response_model=UserResponse)
-async def delete_user(user_id: str):
-    """Delete a user."""
+async def delete_user(user_id: str, force: bool = False):
+    """Delete a user. Use force=true for super_admin to bypass restrictions."""
     api_logger.info("🌐 API Request")
 
     start_time = datetime.utcnow()
@@ -758,12 +835,7 @@ async def delete_user(user_id: str):
                 detail="User ID is required"
             )
 
-        # Prevent deletion of admin users
-        if user_id == "admin" or is_admin_user(user_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot delete admin user"
-            )
+
 
         # Check if user exists
         existing_user = db_config.users.find_one({"user_id": user_id})
@@ -773,8 +845,8 @@ async def delete_user(user_id: str):
                 detail="User not found"
             )
 
-        # Check if user has admin role (double check)
-        if existing_user.get("role") == "admin":
+        # Check if user has admin role (double check, unless force=true)
+        if not force and existing_user.get("role") == "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot delete admin user"
@@ -853,28 +925,17 @@ async def update_user(user_id: str, request: UserUpdateRequest):
             update_data["email"] = request.email
 
         if request.is_active is not None:
-            # Prevent deactivating admin users
-            if (user_id == "admin" or is_admin_user(user_id)) and not request.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Cannot deactivate admin user"
-                )
             update_data["is_active"] = request.is_active
 
         if request.role is not None:
             # Validate role
-            if request.role not in ["user", "admin"]:
+            if request.role not in ["user", "editor"]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Role must be 'user' or 'admin'"
+                    detail="Role must be 'user' or 'editor'"
                 )
 
-            # Prevent changing admin user role
-            if (user_id == "admin" or is_admin_user(user_id)) and request.role != "admin":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Cannot change admin user role"
-                )
+
 
             update_data["role"] = request.role
 
@@ -998,6 +1059,74 @@ async def change_user_password(user_id: str, request: PasswordChangeRequest):
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
         api_logger.log_response(500, processing_time)
         api_logger.error(f"❌ Error changing password: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.patch("/admin/users/{user_id}/reset-password", response_model=UserResponse)
+async def reset_user_password(user_id: str, request: PasswordResetRequest):
+    """Reset user password (super_admin only endpoint)."""
+    api_logger.info(f"🌐 PATCH /admin/users/{user_id}/reset-password")
+
+    start_time = datetime.utcnow()
+
+    try:
+        if not DATABASE_AVAILABLE or not db_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+
+        # Validate input
+        if not user_id or not request.new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID and new password are required"
+            )
+
+        # Check if user exists
+        existing_user = db_config.users.find_one({"user_id": user_id})
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Hash new password
+        new_password_hash = hash_password(request.new_password)
+
+        # Update password
+        result = db_config.users.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "password_hash": new_password_hash,
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+            }
+        )
+
+        if result.modified_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to reset password"
+            )
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.info(f"✅ Password reset successful for user: {user_id} ({processing_time:.2f}ms)")
+
+        return UserResponse(
+            success=True,
+            message="Password reset successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(f"❌ Error resetting password: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
@@ -1612,18 +1741,40 @@ async def list_files(user_id: str):
 
 
 @app.get("/api/s3/download/{file_key:path}")
-async def download_file(file_key: str):
-    """Download a file from S3 storage."""
+async def download_file(file_key: str, user_id: str):
+    """Download a file from S3 storage (only if owned by user)."""
+    api_logger.info(f"🌐 GET /api/s3/download/{file_key} - User: {user_id}")
     start_time = datetime.utcnow()
 
-    if not S3_AVAILABLE:
-        api_logger.error("❌ S3 manager not available")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required"
+        )
+
+    if not S3_AVAILABLE and not FILE_MANAGER_AVAILABLE:
+        api_logger.error("❌ File management services not available")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="S3 service not available"
+            detail="File management service not available"
         )
 
     try:
+        # Check file ownership first
+        if FILE_MANAGER_AVAILABLE:
+            file_manager = get_file_manager()
+            file_metadata = file_manager.get_file_metadata(file_key, user_id)
+
+            if not file_metadata:
+                api_logger.error(f"❌ File not found or access denied: {file_key} for user {user_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="File not found or access denied"
+                )
+
+            api_logger.info(f"✅ File ownership verified: {file_key} belongs to {user_id}")
+
+        # Download from S3
         s3_manager = get_s3_manager()
         result = s3_manager.download_file(file_key)
 
@@ -1636,8 +1787,7 @@ async def download_file(file_key: str):
             # Extract filename from file_key
             filename = file_key.split('/')[-1]
 
-            api_logger.log_response(200, processing_time)
-            api_logger.info(f"✅ File downloaded: {filename}")
+            api_logger.info(f"✅ File downloaded: {filename} by user {user_id} ({processing_time:.2f}ms)")
 
             return StreamingResponse(
                 io.BytesIO(file_data),
@@ -1645,16 +1795,14 @@ async def download_file(file_key: str):
                 headers={"Content-Disposition": f"attachment; filename={filename}"}
             )
         else:
-            api_logger.log_response(404, processing_time)
-            api_logger.error(f"❌ Download failed: {result['error']}")
+            api_logger.error(f"❌ S3 download failed: {result['error']}")
             raise HTTPException(status_code=404, detail=result['error'])
 
     except HTTPException:
         raise
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-        api_logger.log_response(500, processing_time)
-        api_logger.error(f"❌ Download error: {str(e)}")
+        api_logger.error(f"❌ Download error: {str(e)} ({processing_time:.2f}ms)")
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
@@ -1951,8 +2099,13 @@ async def get_user_sync_status(user_id: str):
         from src.services.data_sync_service import get_data_sync_service
         sync_service = get_data_sync_service()
 
-        # Analyze user's files
-        records = sync_service.analyze_file_sync(user_id)
+        # Handle global sync status
+        if user_id == "global":
+            # Analyze all users' files for global status
+            records = sync_service.analyze_file_sync(None)  # None means all users
+        else:
+            # Analyze specific user's files
+            records = sync_service.analyze_file_sync(user_id)
 
         # Create summary
         summary = {

@@ -152,7 +152,7 @@ const UserDropdown: React.FC<UserDropdownProps> = ({ onLogout, sidebarCollapsed 
                   className="text-gray-500 dark:text-gray-400"
                   style={{ fontSize: 'calc(100vw / 7 * 0.05)' }}
                 >
-                  {user?.role === 'admin' ? 'Administrator' : 'User'}
+                  {user?.role === 'editor' ? 'Editor' : user?.role === 'super_admin' ? 'Super Admin' : 'User'}
                 </div>
               </div>
             </button>
@@ -205,8 +205,8 @@ const UserDropdown: React.FC<UserDropdownProps> = ({ onLogout, sidebarCollapsed 
             </div>
           </button>
 
-          {/* Admin Panel - Only for admin users */}
-          {user?.role === 'admin' && (
+          {/* Admin Panel - Only for editor and super_admin users */}
+          {(user?.role === 'editor' || user?.role === 'super_admin') && (
             <button
               onClick={handleAdminPanel}
               className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center space-x-3 transition-colors"

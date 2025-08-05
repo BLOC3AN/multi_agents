@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type { AdminUser, PasswordChangeRequest } from '../types';
-import { getUserCurrentPassword } from '../services/simple-api';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -24,14 +23,9 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState({
-    current_password: false,
     new_password: false,
     confirm_password: false,
   });
-
-  // State for current password display
-  const [currentPassword, setCurrentPassword] = useState<string>('');
-  const [loadingCurrentPassword, setLoadingCurrentPassword] = useState(false);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -42,7 +36,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       newErrors.new_password = 'Password must be at least 6 characters long';
     }
 
-    // Note: We can't validate against current password since it's masked for security
+    // No current password validation needed for admin reset
 
     if (!formData.confirm_password) {
       newErrors.confirm_password = 'Please confirm the password';
@@ -63,7 +57,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
     try {
       await onSubmit(user.user_id, {
-        current_password: currentPassword,
+        current_password: '',
         new_password: formData.new_password
       });
       // Reset form on success
@@ -86,33 +80,8 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     }
   };
 
-  const togglePasswordVisibility = (field: 'current_password' | 'new_password' | 'confirm_password') => {
+  const togglePasswordVisibility = (field: 'new_password' | 'confirm_password') => {
     setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }));
-  };
-
-  // Load current password when modal opens
-  useEffect(() => {
-    if (isOpen && user) {
-      loadCurrentPassword();
-    }
-  }, [isOpen, user]);
-
-  const loadCurrentPassword = async () => {
-    if (!user) return;
-
-    setLoadingCurrentPassword(true);
-    try {
-      const response = await getUserCurrentPassword(user.user_id);
-      if (response.success) {
-        setCurrentPassword(response.current_password || 'No password set');
-      } else {
-        setCurrentPassword('Failed to load');
-      }
-    } catch (error) {
-      setCurrentPassword('Failed to load');
-    } finally {
-      setLoadingCurrentPassword(false);
-    }
   };
 
   if (!isOpen || !user) return null;
@@ -147,59 +116,22 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             </div>
             <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
               <h3 className="text-base font-semibold leading-6 text-gray-900 dark:text-white">
-                Change Password: {user.user_id}
+                Reset Password: {user.user_id}
               </h3>
               <div className="mt-2">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Set a new password for this user account.
+                  Set a new password for this user account. No current password required.
                 </p>
               </div>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-            {/* Current Password Display */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Current Password
-              </label>
-              <div className="relative mt-1">
-                <div className="block w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 pr-10 text-sm text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                  {loadingCurrentPassword ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
-                      Loading current password...
-                    </div>
-                  ) : (
-                    <span className="font-mono text-base tracking-wider">
-                      {showPasswords.current_password ? currentPassword : '••••••••'}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => togglePasswordVisibility('current_password')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-                  disabled={loadingCurrentPassword || currentPassword === 'No password set'}
-                  title={showPasswords.current_password ? 'Hide password' : 'Show password'}
-                >
-                  <span className="text-gray-500 dark:text-gray-400">
-                    {showPasswords.current_password ? '🙈' : '👁️'}
-                  </span>
-                </button>
-              </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {showPasswords.current_password
-                  ? '⚠️ Password is visible. Click the eye icon to hide it.'
-                  : 'Click the eye icon to reveal the current password.'
-                }
-              </p>
-            </div>
 
             {/* New Password */}
             <div>
               <label htmlFor="new_password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                New Password *
+                Password *
               </label>
               <div className="relative mt-1">
                 <input
@@ -210,7 +142,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                   className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
                     errors.new_password ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''
                   }`}
-                  placeholder="Enter new password"
+                  placeholder="Enter password"
                 />
                 <button
                   type="button"
@@ -241,7 +173,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                   className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
                     errors.confirm_password ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''
                   }`}
-                  placeholder="Confirm new password"
+                  placeholder="Confirm password"
                 />
                 <button
                   type="button"
@@ -293,10 +225,10 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                 {loading ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Changing...
+                    Resetting...
                   </>
                 ) : (
-                  'Change Password'
+                  'Reset Password'
                 )}
               </button>
               <button

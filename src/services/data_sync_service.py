@@ -129,7 +129,7 @@ class DataSyncService:
         try:
             qdrant = self.embedding_service.qdrant
             
-            if user_id:
+            if user_id and user_id != "global":
                 # Get files for specific user
                 user_files = qdrant.get_user_files(user_id)
                 return [doc.__dict__ for doc in user_files]
@@ -153,7 +153,8 @@ class DataSyncService:
                         break
                     
                     for point in results:
-                        doc = qdrant.VectorDocument.from_payload(point.id, point.payload)
+                        from src.database.model_qdrant import VectorDocument
+                        doc = VectorDocument.from_payload(point.id, point.payload)
                         all_files.append(doc.__dict__)
                     
                     if next_offset is None:
@@ -224,40 +225,84 @@ class DataSyncService:
             # Match by source (file_key) or title (file_name)
             source = qdrant_file.get("source")
             title = qdrant_file.get("title")
-            
-            # Try to find matching record
-            matched_record = None
-            for key, record in file_records.items():
-                if (source and key == source) or (title and record.file_name == title):
-                    matched_record = record
-                    break
-            
+
+            # Try to find matching record (including chunked files)
+            matched_record = self._find_matching_record(file_records, source, title, qdrant_file)
+
             if matched_record:
                 matched_record.in_qdrant = True
                 matched_record.qdrant_metadata = qdrant_file
             else:
-                # Qdrant file without MongoDB record
-                record = FileRecord(
-                    file_id=qdrant_file.get("id", "unknown"),
-                    user_id=qdrant_file.get("user_id", "unknown"),
-                    file_key=source or title or "unknown",
-                    file_name=title or "unknown",
-                    file_size=0,
-                    content_type="unknown",
-                    upload_date=qdrant_file.get("timestamp", ""),
-                    is_active=True,
-                    in_qdrant=True,
-                    qdrant_metadata=qdrant_file
-                )
-                record.sync_issues.append("Qdrant file without MongoDB record")
-                file_records[record.file_key] = record
+                # Qdrant file without MongoDB record (only add if not a chunk)
+                if not self._is_chunked_file(source, title):
+                    record = FileRecord(
+                        file_id=qdrant_file.get("id", "unknown"),
+                        user_id=qdrant_file.get("user_id", "unknown"),
+                        file_key=source or title or "unknown",
+                        file_name=title or "unknown",
+                        file_size=0,
+                        content_type="unknown",
+                        upload_date=qdrant_file.get("timestamp", ""),
+                        is_active=True,
+                        in_qdrant=True,
+                        qdrant_metadata=qdrant_file
+                    )
+                    record.sync_issues.append("Qdrant file without MongoDB record")
+                    file_records[record.file_key] = record
         
         # Analyze sync status
         for record in file_records.values():
             self._analyze_record_sync_status(record)
         
         return list(file_records.values())
-    
+
+    def _find_matching_record(self, file_records: Dict[str, FileRecord], source: str, title: str, qdrant_file: Dict) -> Optional[FileRecord]:
+        """Find matching MongoDB record for a Qdrant file, including chunked files."""
+
+        # Try exact match first
+        for key, record in file_records.items():
+            if (source and key == source) or (title and record.file_name == title):
+                return record
+
+        # Try chunked file matching
+        if self._is_chunked_file(source, title):
+            original_file_key, original_file_name = self._extract_original_file_info(source, title, qdrant_file)
+
+            # Look for original file in records
+            for key, record in file_records.items():
+                if (original_file_key and key == original_file_key) or (original_file_name and record.file_name == original_file_name):
+                    return record
+
+        return None
+
+    def _is_chunked_file(self, source: str, title: str) -> bool:
+        """Check if this is a chunked file."""
+        if source and "#chunk_" in source:
+            return True
+        if title and " (Part " in title and "/" in title and title.endswith(")"):
+            return True
+        return False
+
+    def _extract_original_file_info(self, source: str, title: str, qdrant_file: Dict) -> tuple:
+        """Extract original file key and name from chunked file info."""
+        original_file_key = None
+        original_file_name = None
+
+        # Extract from source (e.g., "file.pdf#chunk_0" -> "file.pdf")
+        if source and "#chunk_" in source:
+            original_file_key = source.split("#chunk_")[0]
+
+        # Extract from title (e.g., "file.pdf (Part 1/1)" -> "file.pdf")
+        if title and " (Part " in title:
+            original_file_name = title.split(" (Part ")[0]
+
+        # Try to get from metadata.parent_file
+        metadata = qdrant_file.get("metadata", {})
+        if metadata.get("parent_file"):
+            original_file_name = metadata["parent_file"]
+
+        return original_file_key, original_file_name
+
     def _analyze_record_sync_status(self, record: FileRecord):
         """Analyze sync status for a single file record."""
         issues = []

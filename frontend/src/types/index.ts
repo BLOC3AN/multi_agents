@@ -123,6 +123,7 @@ export interface BaseComponentProps {
 export interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAuth?: boolean;
+  requireAdmin?: boolean;
 }
 
 // Admin Dashboard types
@@ -160,7 +161,7 @@ export interface AdminStats {
 }
 
 // User management types
-export type UserRole = 'user' | 'admin';
+export type UserRole = 'user' | 'editor' | 'super_admin';
 
 export interface UserCreateRequest {
   user_id: string;
@@ -180,6 +181,10 @@ export interface UserUpdateRequest {
 
 export interface PasswordChangeRequest {
   current_password: string;
+  new_password: string;
+}
+
+export interface PasswordResetRequest {
   new_password: string;
 }
 

@@ -63,10 +63,13 @@ class Admin:
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
     permissions: Optional[Dict[str, Any]] = None
-    role: str = "admin"  # admin, super_admin, etc.
+    role: str = "super_admin"  # Default to super_admin for full control
     can_manage_users: bool = True
     can_manage_system: bool = True
     can_view_logs: bool = True
+    can_delete_users: bool = True  # Full control permission
+    can_manage_admins: bool = True  # Can manage other admins
+    can_access_all_data: bool = True  # Access to all system data
     notes: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -292,12 +295,15 @@ def ensure_user_exists(user_id: str, display_name: str = None, email: str = None
     """Ensure user exists in database."""
     try:
         db_config = get_db_config()
-        
-        # Check if user exists
+
+        # Check if user exists in users collection
         existing_user = db_config.users.find_one({"user_id": user_id})
-        
-        if not existing_user:
-            # Create new user
+
+        # Also check if user exists in admins collection (to avoid duplicates)
+        existing_admin = db_config.admins.find_one({"admin_id": user_id})
+
+        if not existing_user and not existing_admin:
+            # Create new user only if not exists in both collections
             user = User(
                 user_id=user_id,
                 display_name=display_name or user_id,
@@ -305,17 +311,25 @@ def ensure_user_exists(user_id: str, display_name: str = None, email: str = None
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )
-            
+
             user_doc = user.to_dict()
             db_config.users.insert_one(user_doc)
             print(f"✅ New user created: {user_id}")
             return True
-        else:
-            # Update last login
+        elif existing_user:
+            # Update last login for regular user
             db_config.users.update_one(
                 {"user_id": user_id},
                 {"$set": {"last_login": datetime.utcnow().isoformat()}}
             )
+            return True
+        elif existing_admin:
+            # Update last login for admin user
+            db_config.admins.update_one(
+                {"admin_id": user_id},
+                {"$set": {"last_login": datetime.utcnow().isoformat()}}
+            )
+            print(f"✅ Admin user login updated: {user_id}")
             return True
             
     except Exception as e:
@@ -357,8 +371,8 @@ def ensure_session_exists(session_id: str, user_id: str) -> bool:
 
 # Admin management functions
 def create_admin(admin_id: str, password: str, display_name: str = None, email: str = None,
-                role: str = "admin", **kwargs) -> bool:
-    """Create a new admin user."""
+                role: str = "super_admin", **kwargs) -> bool:
+    """Create a new admin user with full control permissions."""
     try:
         db_config = get_db_config()
 
@@ -372,7 +386,7 @@ def create_admin(admin_id: str, password: str, display_name: str = None, email: 
         from auth_server import hash_password
         password_hash = hash_password(password)
 
-        # Create admin
+        # Create admin with full permissions
         admin = Admin(
             admin_id=admin_id,
             password_hash=password_hash,
@@ -381,12 +395,19 @@ def create_admin(admin_id: str, password: str, display_name: str = None, email: 
             role=role,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
+            # Full control permissions
+            can_manage_users=True,
+            can_manage_system=True,
+            can_view_logs=True,
+            can_delete_users=True,
+            can_manage_admins=True,
+            can_access_all_data=True,
             **kwargs
         )
 
         admin_doc = admin.to_dict()
         db_config.admins.insert_one(admin_doc)
-        print(f"✅ Admin created: {admin_id}")
+        print(f"✅ Admin created with full control: {admin_id}")
         return True
 
     except Exception as e:

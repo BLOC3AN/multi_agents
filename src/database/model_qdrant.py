@@ -180,6 +180,14 @@ class QdrantConfig:
             )
             print("✅ Created index for metadata.category")
 
+            # Create index for metadata.parent_file (for chunked files)
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="metadata.parent_file",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            print("✅ Created index for metadata.parent_file")
+
         except Exception as e:
             # Indexes might already exist, which is fine
             if "already exists" in str(e).lower():
@@ -348,6 +356,7 @@ class QdrantConfig:
     def check_file_exists(self, user_id: str, file_name: str, source: str = None) -> Optional[VectorDocument]:
         """
         Check if a file has already been embedded for a user.
+        Supports both regular files and chunked files.
 
         Args:
             user_id: User ID
@@ -358,7 +367,26 @@ class QdrantConfig:
             VectorDocument if exists, None otherwise
         """
         try:
-            # Build filter conditions
+            # First try exact match
+            exact_result = self._check_file_exact_match(user_id, file_name, source)
+            if exact_result:
+                return exact_result
+
+            # If no exact match, try chunked file match (for PDF files)
+            chunked_result = self._check_chunked_file_exists(user_id, file_name, source)
+            if chunked_result:
+                return chunked_result
+
+            return None
+
+        except Exception as e:
+            print(f"❌ Error checking file existence: {e}")
+            return None
+
+    def _check_file_exact_match(self, user_id: str, file_name: str, source: str = None) -> Optional[VectorDocument]:
+        """Check for exact file match."""
+        try:
+            # Build filter conditions for exact match
             must_conditions = [
                 {
                     "key": "user_id",
@@ -380,7 +408,7 @@ class QdrantConfig:
                 "must": must_conditions
             }
 
-            # Use scroll to find points with filter (more efficient than search for existence check)
+            # Use scroll to find points with filter
             results, _ = self.client.scroll(
                 collection_name=self.collection_name,
                 scroll_filter=models.Filter(**filter_conditions),
@@ -393,6 +421,85 @@ class QdrantConfig:
                 point = results[0]
                 return VectorDocument.from_payload(point.id, point.payload)
 
+            return None
+
+        except Exception as e:
+            print(f"❌ Error in exact match check: {e}")
+            return None
+
+    def _check_chunked_file_exists(self, user_id: str, file_name: str, source: str = None) -> Optional[VectorDocument]:
+        """Check for chunked file existence (for PDF files)."""
+        try:
+            # Method 1: Check for chunks with parent_file metadata
+            try:
+                must_conditions = [
+                    {
+                        "key": "user_id",
+                        "match": {"value": user_id}
+                    },
+                    {
+                        "key": "metadata.parent_file",
+                        "match": {"value": file_name}
+                    }
+                ]
+
+                filter_conditions = {"must": must_conditions}
+
+                results, _ = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=models.Filter(**filter_conditions),
+                    limit=1,
+                    with_payload=True,
+                    with_vectors=False
+                )
+
+                if results:
+                    point = results[0]
+                    return VectorDocument.from_payload(point.id, point.payload)
+
+            except Exception as e:
+                print(f"⚠️ Method 1 failed: {e}")
+
+            # Method 2: Check for source patterns like "filename#chunk_X"
+            if source:
+                try:
+                    must_conditions = [
+                        {
+                            "key": "user_id",
+                            "match": {"value": user_id}
+                        }
+                    ]
+
+                    # Get all documents for this user and check source patterns manually
+                    results, _ = self.client.scroll(
+                        collection_name=self.collection_name,
+                        scroll_filter=models.Filter(must=must_conditions),
+                        limit=100,  # Get more results to check patterns
+                        with_payload=True,
+                        with_vectors=False
+                    )
+
+                    # Check each result for matching patterns
+                    for point in results:
+                        payload = point.payload
+                        point_source = payload.get("source", "")
+                        point_title = payload.get("title", "")
+
+                        # Check if source starts with our file source and has chunk pattern
+                        if point_source.startswith(f"{source}#chunk_"):
+                            return VectorDocument.from_payload(point.id, point.payload)
+
+                        # Check if title starts with our filename and has part pattern
+                        if point_title.startswith(f"{file_name} (Part"):
+                            return VectorDocument.from_payload(point.id, point.payload)
+
+                except Exception as e:
+                    print(f"⚠️ Method 2 failed: {e}")
+
+            return None
+
+        except Exception as e:
+            print(f"❌ Error in chunked file check: {e}")
             return None
 
         except Exception as e:

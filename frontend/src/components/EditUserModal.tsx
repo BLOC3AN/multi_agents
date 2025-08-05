@@ -74,7 +74,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
 
   if (!isOpen || !user) return null;
 
-  const isAdminUser = user.user_id === 'admin';
+  const isEditorUser = false; // Remove protection logic
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -161,15 +161,15 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
                 id="role"
                 value={formData.role}
                 onChange={(e) => handleInputChange('role', e.target.value as UserRole)}
-                disabled={isAdminUser}
+                disabled={isEditorUser}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="user">User</option>
-                <option value="admin">Admin</option>
+                <option value="editor">Editor</option>
               </select>
-              {isAdminUser && (
+              {isEditorUser && (
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Admin user role cannot be changed
+                  Editor user role cannot be changed
                 </p>
               )}
             </div>
@@ -181,15 +181,15 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
                 type="checkbox"
                 checked={formData.is_active}
                 onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                disabled={isAdminUser}
+                disabled={isEditorUser}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                 Active user
               </label>
-              {isAdminUser && (
+              {isEditorUser && (
                 <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
-                  (Admin user cannot be deactivated)
+                  (Editor user cannot be deactivated)
                 </span>
               )}
             </div>

@@ -23,6 +23,13 @@ try:
 except ImportError:
     PDF_AVAILABLE = False
 
+# LangChain PDF processor
+try:
+    from .langchain_pdf_processor import get_langchain_pdf_processor
+    LANGCHAIN_PDF_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_PDF_AVAILABLE = False
+
 # Embedding imports
 try:
     from sentence_transformers import SentenceTransformer
@@ -77,20 +84,32 @@ class TextExtractor:
             raise Exception(f"Failed to extract text from DOCX: {e}")
     
     @staticmethod
-    def extract_from_pdf(content: bytes) -> str:
-        """Extract text from PDF files."""
+    def extract_from_pdf(content: bytes, filename: str = "") -> str:
+        """Extract text from PDF files using LangChain or fallback methods."""
+        # Try LangChain PDF processor first (better quality)
+        if LANGCHAIN_PDF_AVAILABLE:
+            try:
+                pdf_processor = get_langchain_pdf_processor()
+                if pdf_processor.is_available():
+                    print(f"📄 Using LangChain PDF processor for {filename}")
+                    return pdf_processor.extract_text(content, filename)
+            except Exception as e:
+                print(f"⚠️ LangChain PDF processor failed: {e}")
+
+        # Fallback to PyPDF2
         if not PDF_AVAILABLE:
-            raise ImportError("PyPDF2 not available. Install with: pip install PyPDF2")
-        
+            raise ImportError("PDF processing not available. Install with: pip install PyPDF2 langchain-community")
+
         try:
+            print(f"📄 Using PyPDF2 fallback for {filename}")
             pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
             text_parts = []
-            
+
             for page in pdf_reader.pages:
                 text = page.extract_text()
                 if text.strip():
                     text_parts.append(text.strip())
-            
+
             return '\n'.join(text_parts)
         except Exception as e:
             raise Exception(f"Failed to extract text from PDF: {e}")
@@ -146,7 +165,7 @@ class TextExtractor:
             return cls.extract_from_docx(content)
         
         elif content_type == 'application/pdf' or filename_lower.endswith('.pdf'):
-            return cls.extract_from_pdf(content)
+            return cls.extract_from_pdf(content, filename)
         
         elif content_type == 'text/markdown' or filename_lower.endswith(('.md', '.markdown')):
             return cls.extract_from_markdown(content)
@@ -290,8 +309,118 @@ class FileEmbeddingService:
         existing_doc = self.qdrant.check_file_exists(user_id, filename, file_key)
         return existing_doc is not None
     
-    def embed_file(self, user_id: str, filename: str, file_content: bytes, 
-                   content_type: str, file_key: str = None, 
+    def embed_file_chunked(self, user_id: str, filename: str, file_content: bytes,
+                          content_type: str, file_key: str = None,
+                          metadata: Dict[str, Any] = None) -> List[str]:
+        """
+        Extract text and embed a PDF file in chunks for better processing.
+
+        Args:
+            user_id: User ID
+            filename: File name
+            file_content: File content as bytes
+            content_type: MIME content type
+            file_key: Optional file key
+            metadata: Additional metadata
+
+        Returns:
+            List of document IDs if successful, empty list otherwise
+        """
+        if not self.is_available():
+            print("❌ File embedding service not available")
+            return []
+
+        # Only use chunked embedding for PDFs
+        if not (content_type == 'application/pdf' or filename.lower().endswith('.pdf')):
+            # Use regular embedding for non-PDF files
+            doc_id = self.embed_file(user_id, filename, file_content, content_type, file_key, metadata)
+            return [doc_id] if doc_id else []
+
+        if not LANGCHAIN_PDF_AVAILABLE:
+            print("⚠️ LangChain PDF processor not available, using regular embedding")
+            doc_id = self.embed_file(user_id, filename, file_content, content_type, file_key, metadata)
+            return [doc_id] if doc_id else []
+
+        # Check if already embedded
+        if self.check_file_embedded(user_id, filename, file_key):
+            print(f"⏭️ File {filename} already embedded for user {user_id}")
+            return []
+
+        try:
+            # Extract text in chunks using LangChain
+            pdf_processor = get_langchain_pdf_processor()
+            chunks = pdf_processor.extract_text_with_chunks(file_content, filename)
+
+            if not chunks:
+                print(f"⚠️ No text chunks extracted from {filename}")
+                return []
+
+            print(f"📄 Extracted {len(chunks)} chunks from {filename}")
+
+            doc_ids = []
+            doc_metadata = metadata.copy() if metadata else {}
+            doc_category = doc_metadata.pop('category', 'file')
+
+            # Embed each chunk
+            for chunk_info in chunks:
+                chunk_text = chunk_info['text']
+                chunk_index = chunk_info['chunk_index']
+                total_chunks = chunk_info['total_chunks']
+
+                if not chunk_text.strip():
+                    continue
+
+                # Create embedding for chunk
+                print(f"🔢 Creating embedding for chunk {chunk_index + 1}/{total_chunks}")
+                embedding = self.embedding_provider.encode(chunk_text)
+
+                # Create unique title for chunk
+                chunk_title = f"{filename} (Part {chunk_index + 1}/{total_chunks})"
+                chunk_source = f"{file_key or filename}#chunk_{chunk_index}"
+
+                # Add chunk metadata
+                chunk_metadata = doc_metadata.copy()
+                chunk_metadata.update({
+                    'chunk_index': chunk_index,
+                    'total_chunks': total_chunks,
+                    'is_chunk': True,
+                    'parent_file': filename
+                })
+
+                # Create vector document for chunk
+                doc = create_vector_document(
+                    text=chunk_text,
+                    user_id=user_id,
+                    title=chunk_title,
+                    source=chunk_source,
+                    category=doc_category,
+                    language="vi",
+                    summary=chunk_text[:200] + "..." if len(chunk_text) > 200 else chunk_text,
+                    **chunk_metadata
+                )
+
+                # Store in Qdrant
+                success = self.qdrant.upsert_document(doc, embedding)
+                doc_id = doc.id if success else None
+                if doc_id:
+                    doc_ids.append(doc_id)
+                    print(f"✅ Chunk {chunk_index + 1} embedded with ID: {doc_id}")
+                else:
+                    print(f"❌ Failed to embed chunk {chunk_index + 1}")
+
+            if doc_ids:
+                print(f"✅ Successfully embedded {len(doc_ids)} chunks from {filename}")
+            else:
+                print(f"❌ Failed to embed any chunks from {filename}")
+
+            return doc_ids
+
+        except Exception as e:
+            print(f"❌ Error embedding file {filename}: {e}")
+            return []
+
+    def embed_file(self, user_id: str, filename: str, file_content: bytes,
+                   content_type: str, file_key: str = None,
                    metadata: Dict[str, Any] = None) -> Optional[str]:
         """
         Extract text and embed a file.

@@ -118,6 +118,8 @@ export async function getAdminUsers(): Promise<{ success: boolean; data?: AdminU
   }
 }
 
+
+
 export async function getAdminSessions(): Promise<{ success: boolean; data?: AdminSession[]; error?: string }> {
   try {
     console.log('💬 Getting admin sessions...');
@@ -317,11 +319,12 @@ export async function updateUser(userId: string, userData: UserUpdateRequest): P
   }
 }
 
-export async function deleteUser(userId: string): Promise<UserResponse> {
+export async function deleteUser(userId: string, force: boolean = false): Promise<UserResponse> {
   try {
-    console.log('🗑️ Deleting user:', userId);
+    console.log('🗑️ Deleting user:', userId, 'force:', force);
 
     const response = await axios.delete(`${API_BASE_URL}/admin/users/${userId}`, {
+      params: force ? { force: true } : {},
       timeout: 10000,
     });
 
@@ -361,6 +364,32 @@ export async function changeUserPassword(userId: string, passwordData: PasswordC
     return {
       success: false,
       error: error.response?.data?.detail || error.message || 'Failed to change password',
+    };
+  }
+}
+
+export async function resetUserPassword(userId: string, newPassword: string): Promise<UserResponse> {
+  try {
+    console.log('🔑 Resetting password for user:', userId);
+
+    const response = await axios.patch(`${API_BASE_URL}/admin/users/${userId}/reset-password`, {
+      new_password: newPassword
+    }, {
+      timeout: 10000,
+    });
+
+    console.log('🔑 Reset password response:', response.data);
+
+    return {
+      success: true,
+      message: response.data.message,
+    };
+
+  } catch (error: any) {
+    console.error('🔑 Reset password error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to reset password',
     };
   }
 }

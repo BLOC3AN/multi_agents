@@ -68,6 +68,10 @@ db.createCollection("admins", {
                pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
                description: "must be a valid email address if the field exists"
             },
+            password: {
+               bsonType: "string",
+               description: "must be a string if the field exists"
+            },
             password_hash: {
                bsonType: "string",
                description: "must be a string if the field exists"
@@ -102,6 +106,18 @@ db.createCollection("admins", {
                description: "must be a boolean"
             },
             can_view_logs: {
+               bsonType: "bool",
+               description: "must be a boolean"
+            },
+            can_delete_users: {
+               bsonType: "bool",
+               description: "must be a boolean"
+            },
+            can_manage_admins: {
+               bsonType: "bool",
+               description: "must be a boolean"
+            },
+            can_access_all_data: {
                bsonType: "bool",
                description: "must be a boolean"
             },

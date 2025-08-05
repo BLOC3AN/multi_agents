@@ -6,8 +6,9 @@ import type { ProtectedRouteProps } from '../types';
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireAuth = true,
+  requireAdmin = false,
 }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, isAdmin } = useAuth();
   const location = useLocation();
 
   // Show loading spinner while checking authentication
@@ -22,6 +23,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // If route requires auth but user is not authenticated, redirect to login
   if (requireAuth && !isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If route requires admin but user is not admin, redirect to chat
+  if (requireAdmin && isAuthenticated && !isAdmin()) {
+    return <Navigate to="/chat" replace />;
   }
 
   // If user is authenticated but trying to access login page, redirect to chat

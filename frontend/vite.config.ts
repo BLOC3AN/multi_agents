@@ -24,6 +24,8 @@ export default defineConfig({
         ws: true,
       },
     },
+    // Enable SPA fallback for client-side routing
+    historyApiFallback: true,
   },
   build: {
     outDir: 'dist',

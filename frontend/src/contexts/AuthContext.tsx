@@ -5,6 +5,7 @@ import { login as apiLogin, logout as apiLogout } from '../services/simple-api';
 interface AuthContextType extends AuthState {
   login: (credentials: LoginRequest) => Promise<void>;
   logout: () => void;
+  isAdmin: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -127,10 +128,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const isAdmin = (): boolean => {
+    return state.user?.role === 'editor' || state.user?.role === 'super_admin';
+  };
+
   const value: AuthContextType = {
     ...state,
     login,
     logout,
+    isAdmin,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

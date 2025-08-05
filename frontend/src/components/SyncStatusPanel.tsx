@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, AlertTriangle, CheckCircle, Database, HardDrive, Search } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle, Database, HardDrive, Search, Upload } from 'lucide-react';
 
 interface SyncStatus {
   user_id: string;
@@ -29,22 +29,34 @@ const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ userId, className = '
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [embeddingFiles, setEmbeddingFiles] = useState<Set<string>>(new Set());
 
-  const fetchSyncStatus = async () => {
+  const fetchSyncStatus = async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      const response = await fetch(`/api/sync/status/${userId}`);
+      // Add cache busting parameter for force refresh
+      const url = forceRefresh
+        ? `/api/sync/status/${userId}?_t=${Date.now()}`
+        : `/api/sync/status/${userId}`;
+
+      const response = await fetch(url, {
+        cache: forceRefresh ? 'no-cache' : 'default'
+      });
       const data = await response.json();
-      
+
+      console.log(`[SyncStatusPanel] Fetched sync status for ${userId}:`, data);
+
       if (data.success) {
         setSyncStatus(data.sync_status);
         setLastUpdated(new Date());
+        console.log(`[SyncStatusPanel] Updated sync status:`, data.sync_status);
       } else {
         setError(data.error || 'Failed to fetch sync status');
       }
     } catch (err) {
+      console.error(`[SyncStatusPanel] Error fetching sync status:`, err);
       setError(err instanceof Error ? err.message : 'Failed to fetch sync status');
     } finally {
       setLoading(false);
@@ -54,7 +66,7 @@ const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ userId, className = '
   const analyzeSyncIssues = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/sync/analyze', {
         method: 'POST',
@@ -63,12 +75,12 @@ const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ userId, className = '
         },
         body: JSON.stringify({ user_id: userId }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
-        // Refresh status after analysis
-        await fetchSyncStatus();
+        // Force refresh status after analysis
+        await fetchSyncStatus(true);
       } else {
         setError(data.error || 'Failed to analyze sync issues');
       }
@@ -76,6 +88,92 @@ const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ userId, className = '
       setError(err instanceof Error ? err.message : 'Failed to analyze sync issues');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const manualEmbedFile = async (fileKey: string) => {
+    setEmbeddingFiles(prev => new Set(prev).add(fileKey));
+    setError(null);
+
+    try {
+      const response = await fetch('/api/s3/embed-existing', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          file_key: fileKey
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Force refresh status after embedding
+        await fetchSyncStatus(true);
+      } else {
+        setError(data.error || 'Failed to embed file');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to embed file');
+    } finally {
+      setEmbeddingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileKey);
+        return newSet;
+      });
+    }
+  };
+
+  const embedAllMissingFiles = async () => {
+    if (!syncStatus) return;
+
+    const missingFiles = syncStatus.files.filter(
+      file => !file.locations.qdrant && file.locations.mongodb && file.locations.s3
+    );
+
+    if (missingFiles.length === 0) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Embed files sequentially to avoid overwhelming the server
+      for (const file of missingFiles) {
+        setEmbeddingFiles(prev => new Set(prev).add(file.file_key));
+
+        const response = await fetch('/api/s3/embed-existing', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            file_key: file.file_key
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+          console.error(`Failed to embed ${file.file_name}:`, data.error);
+        }
+
+        setEmbeddingFiles(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(file.file_key);
+          return newSet;
+        });
+      }
+
+      // Force refresh status after all embeddings
+      await fetchSyncStatus(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to embed files');
+    } finally {
+      setLoading(false);
+      setEmbeddingFiles(new Set());
     }
   };
 
@@ -203,12 +301,40 @@ const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ userId, className = '
             {/* Actions */}
             <div className="flex space-x-2 mb-4">
               <button
+                onClick={() => fetchSyncStatus(true)}
+                disabled={loading}
+                className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 flex items-center space-x-1"
+                title="Force refresh sync status"
+              >
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+
+              <button
                 onClick={analyzeSyncIssues}
                 disabled={loading}
                 className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
               >
                 Analyze Issues
               </button>
+
+              {/* Embed All Missing Button */}
+              {syncStatus.files.some(file => !file.locations.qdrant && file.locations.mongodb && file.locations.s3) && (
+                <button
+                  onClick={embedAllMissingFiles}
+                  disabled={loading || embeddingFiles.size > 0}
+                  className="px-3 py-1 text-sm bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-800 disabled:opacity-50 flex items-center space-x-1"
+                >
+                  {loading ? (
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Upload className="w-3 h-3" />
+                  )}
+                  <span>
+                    {loading ? 'Embedding All...' : `Embed All Missing (${syncStatus.files.filter(file => !file.locations.qdrant && file.locations.mongodb && file.locations.s3).length})`}
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* Files List */}
@@ -235,12 +361,29 @@ const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ userId, className = '
                       </div>
                       
                       <div className="flex items-center space-x-2 ml-2">
+                        {/* Manual Embed Button - Show only if missing from Qdrant */}
+                        {!file.locations.qdrant && file.locations.mongodb && file.locations.s3 && (
+                          <button
+                            onClick={() => manualEmbedFile(file.file_key)}
+                            disabled={embeddingFiles.has(file.file_key)}
+                            className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50 flex items-center space-x-1"
+                            title="Manually embed this file to Qdrant"
+                          >
+                            {embeddingFiles.has(file.file_key) ? (
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Upload className="w-3 h-3" />
+                            )}
+                            <span>{embeddingFiles.has(file.file_key) ? 'Embedding...' : 'Embed'}</span>
+                          </button>
+                        )}
+
                         {/* Sync Status */}
                         <div className={`flex items-center space-x-1 ${getSyncStatusColor(file.sync_status)}`}>
                           {getSyncStatusIcon(file.sync_status)}
                           <span className="text-xs capitalize">{file.sync_status.replace('_', ' ')}</span>
                         </div>
-                        
+
                         {/* Storage Locations */}
                         <div className="flex items-center space-x-1">
                           <div

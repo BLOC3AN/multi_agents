@@ -15,15 +15,16 @@ import {
   createUser,
   updateUser,
   deleteUser,
-  changeUserPassword
+  resetUserPassword
 } from '../services/simple-api';
-import type { AdminUser, AdminSession, AdminStats, UserCreateRequest, UserUpdateRequest, PasswordChangeRequest } from '../types';
+import type { AdminUser, AdminSession, AdminStats, UserCreateRequest, UserUpdateRequest, PasswordChangeRequest, User } from '../types';
 import AddUserModal from '../components/AddUserModal';
 import EditUserModal from '../components/EditUserModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import UserHistoryModal from '../components/UserHistoryModal';
 import ConfirmationDialog from '../components/ConfirmationDialog';
 import SyncStatusPanel from '../components/SyncStatusPanel';
+import SyncStatusIndicator from '../components/SyncStatusIndicator';
 import Toast from '../components/Toast';
 
 const AdminPage: React.FC = () => {
@@ -35,7 +36,8 @@ const AdminPage: React.FC = () => {
 
   // Data states with caching
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [sessions, setSessions] = useState<AdminSession[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]);
@@ -44,6 +46,7 @@ const AdminPage: React.FC = () => {
   const [dataCache, setDataCache] = useState({
     stats: false,
     users: false,
+    admins: false,
     sessions: false,
     messages: false,
     files: false
@@ -85,8 +88,8 @@ const AdminPage: React.FC = () => {
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Check if user is admin
-  const isAdmin = user?.role === 'admin';
+  // Check if user is admin (including super_admin)
+  const isAdmin = user?.role === 'editor' || user?.role === 'super_admin';
 
   // Handle navigation back to chat
   const handleBackToChat = () => {
@@ -129,6 +132,26 @@ const AdminPage: React.FC = () => {
       }
     } catch (error) {
       setError('Failed to load users');
+    }
+  };
+
+  const loadAdmins = async (force = false) => {
+    if (dataCache.admins && !force) return; // Skip if already loaded
+
+    try {
+      // Get admins from admins collection (super_admin only)
+      const response = await fetch(`http://localhost:8000/admin/users?collection=admins`);
+      const data = await response.json();
+
+      if (data.success) {
+        setAdmins(data.users || []);
+        setDataCache(prev => ({ ...prev, admins: true }));
+      } else {
+        setError(data.error || 'Failed to load admins');
+      }
+    } catch (error) {
+      console.error('Error loading admins:', error);
+      setError('Failed to load admins');
     }
   };
 
@@ -191,12 +214,16 @@ const AdminPage: React.FC = () => {
         await loadStats();
       } else if (activeTab === 'users') {
         await loadUsers();
+        await loadAdmins(true); // Force reload admins
       } else if (activeTab === 'sessions') {
         await loadSessions();
       } else if (activeTab === 'messages') {
         await loadMessages();
       } else if (activeTab === 'files') {
         await loadFiles();
+      } else if (activeTab === 'sync') {
+        // Sync tab needs users data for per-user sync status
+        await loadUsers();
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -436,7 +463,7 @@ const AdminPage: React.FC = () => {
 
     setActionLoading(true);
     try {
-      const response = await deleteUser(selectedUser.user_id);
+      const response = await deleteUser(selectedUser.user_id, false);
       if (response.success) {
         showToast('User deleted successfully!', 'success');
         loadData(); // Refresh user list
@@ -445,7 +472,7 @@ const AdminPage: React.FC = () => {
       } else {
         showToast(response.error || 'Failed to delete user', 'error');
       }
-    } catch (error) {
+    } catch (error: any) {
       showToast('An unexpected error occurred', 'error');
     } finally {
       setActionLoading(false);
@@ -455,11 +482,12 @@ const AdminPage: React.FC = () => {
   const handleChangePassword = async (userId: string, passwordData: PasswordChangeRequest) => {
     setActionLoading(true);
     try {
-      const response = await changeUserPassword(userId, passwordData);
+      // Use reset password instead of change password (no current password needed)
+      const response = await resetUserPassword(userId, passwordData.new_password);
       if (response.success) {
-        showToast('Password changed successfully!', 'success');
+        showToast('Password reset successfully!', 'success');
       } else {
-        showToast(response.error || 'Failed to change password', 'error');
+        showToast(response.error || 'Failed to reset password', 'error');
       }
     } catch (error) {
       showToast('An unexpected error occurred', 'error');
@@ -506,7 +534,7 @@ const AdminPage: React.FC = () => {
             🚫 Access Denied
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            You need admin privileges to access this page.
+            You need editor or super_admin privileges to access this page.
           </p>
         </div>
       </div>
@@ -553,6 +581,7 @@ const AdminPage: React.FC = () => {
               { id: 'sessions', label: '💬 Sessions' },
               { id: 'messages', label: '💬 Messages' },
               { id: 'files', label: '📁 Files' },
+              { id: 'sync', label: '🔄 Sync' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -595,7 +624,7 @@ const AdminPage: React.FC = () => {
             <>
               {/* Statistics Tab */}
               {activeTab === 'stats' && stats && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <button
                     onClick={() => handleStatsNavigation('users')}
                     className={`bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-left group ${
@@ -703,21 +732,23 @@ const AdminPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Users Tab */}
+              {/* Users Tab - Split into Users and Admins */}
               {activeTab === 'users' && (
-                <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
-                  <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                      Users ({users.length})
-                    </h3>
-                    <button
-                      onClick={() => setShowAddUserModal(true)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                    >
-                      <span className="mr-2">👤</span>
-                      Add User
-                    </button>
-                  </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Users Management */}
+                  <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+                    <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
+                      <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                        👥 Users ({users.length})
+                      </h3>
+                      <button
+                        onClick={() => setShowAddUserModal(true)}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                      >
+                        <span className="mr-2">👤</span>
+                        Add User
+                      </button>
+                    </div>
                   {users.length === 0 ? (
                     <div className="text-center py-12">
                       <div className="text-6xl mb-4">👥</div>
@@ -747,11 +778,13 @@ const AdminPage: React.FC = () => {
                                 {user.is_active ? '✅ Active' : '❌ Inactive'}
                               </span>
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                user.role === 'admin'
+                                user.role === 'super_admin'
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                  : user.role === 'admin'
                                   ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
                                   : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                               }`}>
-                                {user.role === 'admin' ? '👑 Admin' : '👤 User'}
+                                {user.role === 'super_admin' ? '👑 Super Admin' : user.role === 'admin' ? '👑 Admin' : '👤 User'}
                               </span>
                             </div>
                             <div className="flex-1 min-w-0">
@@ -797,7 +830,7 @@ const AdminPage: React.FC = () => {
                               <span className="sm:hidden">📊</span>
                               <span className="hidden sm:inline">📊 History</span>
                             </button>
-                            {user.user_id !== 'admin' && (
+                            {user.role !== 'admin' && user.role !== 'super_admin' ? (
                               <button
                                 onClick={() => openDeleteConfirmation(user)}
                                 className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors"
@@ -805,6 +838,15 @@ const AdminPage: React.FC = () => {
                               >
                                 <span className="sm:hidden">🗑️</span>
                                 <span className="hidden sm:inline">🗑️ Delete</span>
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-gray-400 bg-gray-100 cursor-not-allowed dark:bg-gray-800 dark:text-gray-500"
+                                title="Admin users cannot be deleted"
+                              >
+                                <span className="sm:hidden">🔒</span>
+                                <span className="hidden sm:inline">🔒 Protected</span>
                               </button>
                             )}
                           </div>
@@ -814,6 +856,108 @@ const AdminPage: React.FC = () => {
                       </ul>
                     </div>
                   )}
+                  </div>
+
+                  {/* Admins Management */}
+                  <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+                    <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
+                      <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                        👑 Admins ({admins.length})
+                      </h3>
+                      <button
+                        onClick={() => setShowAddUserModal(true)}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                      >
+                        <span className="mr-2">👑</span>
+                        Add Admin
+                      </button>
+                    </div>
+                    {admins.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="text-6xl mb-4">👑</div>
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No admins found</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mb-4">Get started by creating your first admin.</p>
+                        <button
+                          onClick={() => setShowAddUserModal(true)}
+                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                        >
+                          <span className="mr-2">👑</span>
+                          Add First Admin
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="max-h-96 overflow-y-auto admin-list-scroll pr-2">
+                        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {admins.map((admin) => (
+                            <li key={admin.user_id} className="px-4 py-4 sm:px-6">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                                <div className="flex items-start sm:items-center space-x-3 flex-1">
+                                  <div className="flex flex-col space-y-1 flex-shrink-0">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      admin.is_active
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                    }`}>
+                                      {admin.is_active ? '✅ Active' : '❌ Inactive'}
+                                    </span>
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                      👑 Admin
+                                    </span>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                      {admin.username}
+                                    </p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                                      {admin.email}
+                                    </p>
+                                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                                      Created: {new Date(admin.created_at).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    onClick={() => openEditUserModal(admin)}
+                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800 transition-colors"
+                                    title="Edit Admin"
+                                  >
+                                    <span className="sm:hidden">✏️</span>
+                                    <span className="hidden sm:inline">✏️ Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => openChangePasswordModal(admin)}
+                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-yellow-700 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 dark:bg-yellow-900 dark:text-yellow-200 dark:hover:bg-yellow-800 transition-colors"
+                                    title="Change Password"
+                                  >
+                                    <span className="sm:hidden">🔑</span>
+                                    <span className="hidden sm:inline">🔑 Password</span>
+                                  </button>
+                                  <button
+                                    onClick={() => openUserHistoryModal(admin)}
+                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800 transition-colors"
+                                    title="View History"
+                                  >
+                                    <span className="sm:hidden">📊</span>
+                                    <span className="hidden sm:inline">📊 History</span>
+                                  </button>
+                                  {/* Admin users cannot be deleted for security reasons */}
+                                  <button
+                                    disabled
+                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-gray-400 bg-gray-100 cursor-not-allowed dark:bg-gray-800 dark:text-gray-500"
+                                    title="Admin users cannot be deleted"
+                                  >
+                                    <span className="sm:hidden">🔒</span>
+                                    <span className="hidden sm:inline">🔒 Protected</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1041,32 +1185,9 @@ const AdminPage: React.FC = () => {
                   </div>
 
                   {/* Global Sync Status */}
-                  <SyncStatusPanel userId="" className="mb-6" />
+                  <SyncStatusPanel userId="global" className="mb-6" />
 
-                  {/* Per-User Sync Status */}
-                  {users.length > 0 && (
-                    <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
-                      <div className="px-4 py-5 sm:px-6">
-                        <h4 className="text-md leading-6 font-medium text-gray-900 dark:text-white">
-                          User-Specific Sync Status
-                        </h4>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          Check sync status for individual users.
-                        </p>
-                      </div>
-                      <div className="border-t border-gray-200 dark:border-gray-700">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-                          {users.slice(0, 6).map((user) => (
-                            <SyncStatusPanel
-                              key={user.user_id}
-                              userId={user.user_id}
-                              className="border border-gray-200 dark:border-gray-600"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+
                 </div>
               )}
             </>

@@ -110,11 +110,14 @@ def ensure_user_exists(user_id: str, display_name: str = None, email: str = None
         return
 
     try:
-        # Check if user exists
+        # Check if user exists in users collection
         existing_user = db_config.users.find_one({"user_id": user_id})
 
-        if not existing_user:
-            # Create new user
+        # Also check if user exists in admins collection (to avoid duplicates)
+        existing_admin = db_config.admins.find_one({"admin_id": user_id})
+
+        if not existing_user and not existing_admin:
+            # Create new user only if not exists in both collections
             user = User(
                 user_id=user_id,
                 display_name=display_name or user_id,
@@ -126,12 +129,19 @@ def ensure_user_exists(user_id: str, display_name: str = None, email: str = None
             user_doc = user.to_dict()
             db_config.users.insert_one(user_doc)
             system_logger.info(f"✅ New user created: {user_id}")
-        else:
-            # Update last login
+        elif existing_user:
+            # Update last login for regular user
             db_config.users.update_one(
                 {"user_id": user_id},
                 {"$set": {"last_login": datetime.utcnow()}}
             )
+        elif existing_admin:
+            # Update last login for admin user
+            db_config.admins.update_one(
+                {"admin_id": user_id},
+                {"$set": {"last_login": datetime.utcnow()}}
+            )
+            system_logger.info(f"✅ Admin user login updated: {user_id}")
 
     except Exception as e:
         system_logger.error(f"❌ Failed to ensure user exists: {e}")
