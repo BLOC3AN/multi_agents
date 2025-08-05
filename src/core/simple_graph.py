@@ -1,6 +1,7 @@
 """
 Simple single-agent graph to replace the complex multi-agent orchestration.
-This provides a clean, straightforward conversation flow.
+This provides a clean, straightforward conversation flow with optional RAG support.
+Optimized with caching for better performance.
 """
 from langgraph.graph import StateGraph, END
 from src.core.types import AgentState
@@ -8,11 +9,47 @@ from src.agents.conversation_agent import ConversationAgent
 from src.llms.llm_factory import LLMFactory
 from src.config.settings import config
 
+# Import RAG agent
+try:
+    from src.RAG.rag_agent import RAGAgent
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+
+# Import caching
+try:
+    from src.core.agent_cache import (
+        create_cached_conversation_agent,
+        create_cached_rag_agent,
+        get_cached_agent_graph,
+        get_agent_cache_manager
+    )
+    CACHING_AVAILABLE = True
+except ImportError:
+    CACHING_AVAILABLE = False
+
 
 def create_conversation_agent() -> ConversationAgent:
-    """Create and return a conversation agent instance."""
+    """Create and return a conversation agent instance with caching."""
+    if CACHING_AVAILABLE:
+        return create_cached_conversation_agent()
+
+    # Fallback to non-cached version
     llm_factory = LLMFactory(config.llm)
     return ConversationAgent(llm_factory)
+
+
+def create_rag_agent() -> 'RAGAgent':
+    """Create and return a RAG agent instance with caching."""
+    if not RAG_AVAILABLE:
+        raise ImportError("RAG agent not available")
+
+    if CACHING_AVAILABLE:
+        return create_cached_rag_agent()
+
+    # Fallback to non-cached version
+    llm_factory = LLMFactory(config.llm)
+    return RAGAgent(llm_factory)
 
 
 def process_conversation_node(state: AgentState) -> AgentState:
@@ -21,25 +58,53 @@ def process_conversation_node(state: AgentState) -> AgentState:
     return agent.process(state)
 
 
+def process_rag_node(state: AgentState) -> AgentState:
+    """Node for processing conversation with RAG agent."""
+    if not RAG_AVAILABLE:
+        # Fallback to regular conversation agent
+        return process_conversation_node(state)
+
+    agent = create_rag_agent()
+    return agent.process(state)
+
+
 def create_simple_agent_graph():
     """
-    Create a simple graph with just one conversation agent.
-    This replaces the complex multi-agent graph.
+    Create a simple graph with RAG agent if available, fallback to conversation agent.
+    This replaces the complex multi-agent graph. Uses caching for better performance.
     """
+    if CACHING_AVAILABLE:
+        # Try to get cached graph first
+        cached_graph = get_cached_agent_graph()
+        if cached_graph:
+            return cached_graph
+
     # Create the graph
     workflow = StateGraph(AgentState)
-    
-    # Add the single conversation node
-    workflow.add_node("conversation", process_conversation_node)
-    
+
+    # Use RAG agent if available, otherwise fallback to conversation agent
+    if RAG_AVAILABLE:
+        print("🔍 Using RAG agent for enhanced search capabilities")
+        workflow.add_node("conversation", process_rag_node)
+    else:
+        print("💬 Using basic conversation agent (RAG not available)")
+        workflow.add_node("conversation", process_conversation_node)
+
     # Set entry point
     workflow.set_entry_point("conversation")
-    
+
     # Add edge to end
     workflow.add_edge("conversation", END)
-    
+
     # Compile the graph
-    return workflow.compile()
+    compiled_graph = workflow.compile()
+
+    # Cache the compiled graph if caching is available
+    if CACHING_AVAILABLE:
+        cache_manager = get_agent_cache_manager()
+        cache_manager.cache_agent('graph', compiled_graph)
+
+    return compiled_graph
 
 
 def create_initial_state(user_input: str, user_id: str = None, session_id: str = None,

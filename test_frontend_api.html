@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Frontend API</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>Test Frontend API Calls</h1>
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        const resultsDiv = document.getElementById('results');
+
+        function log(message) {
+            console.log(message);
+            resultsDiv.innerHTML += '<p>' + message + '</p>';
+        }
+
+        async function testAPIs() {
+            try {
+                // Test 1: Health check
+                log('🔍 Testing health check...');
+                const healthResponse = await axios.get(`${API_BASE_URL}/health`);
+                log('✅ Health check: ' + JSON.stringify(healthResponse.data));
+
+                // Test 2: Login
+                log('🔐 Testing login...');
+                const loginResponse = await axios.post(`${API_BASE_URL}/auth/login`, {
+                    user_id: 'admin',
+                    password: 'admin123'
+                });
+                log('✅ Login: ' + JSON.stringify(loginResponse.data));
+
+                // Test 3: Get user sessions
+                log('📋 Testing get user sessions...');
+                const sessionsResponse = await axios.get(`${API_BASE_URL}/user/admin/sessions`);
+                log('✅ User sessions: ' + JSON.stringify(sessionsResponse.data));
+
+                if (sessionsResponse.data.sessions && sessionsResponse.data.sessions.length > 0) {
+                    const firstSession = sessionsResponse.data.sessions[0];
+                    log('📝 First session title: ' + firstSession.title);
+                    log('📊 First session total_messages: ' + firstSession.total_messages);
+
+                    // Test 4: Get session messages
+                    log('💬 Testing get session messages...');
+                    const messagesResponse = await axios.get(`${API_BASE_URL}/session/${firstSession.session_id}/messages`);
+                    log('✅ Session messages: ' + JSON.stringify(messagesResponse.data));
+                }
+
+                // Test 5: Update session title
+                log('✏️ Testing update session title...');
+                const updateResponse = await axios.put(`${API_BASE_URL}/session/test_session_123/title`, {
+                    title: 'Updated Test Session Title'
+                });
+                log('✅ Update session title: ' + JSON.stringify(updateResponse.data));
+
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+                if (error.response) {
+                    log('❌ Response data: ' + JSON.stringify(error.response.data));
+                }
+            }
+        }
+
+        // Run tests when page loads
+        testAPIs();
+    </script>
+</body>
+</html>

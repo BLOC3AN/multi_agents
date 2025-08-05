@@ -162,7 +162,7 @@ export const ChannelProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const newSession: ChatSession = {
       session_id: sessionId,
-      session_name: `Chat ${new Date().toLocaleTimeString()}`,
+      title: `Chat ${new Date().toLocaleTimeString()}`,
       user_id: '', // Will be set by useSocket
       created_at: now,
       updated_at: now,

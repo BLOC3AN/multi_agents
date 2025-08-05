@@ -299,9 +299,9 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
                       </div>
                     ) : (
                       <>
-                        <div className="truncate flex-1" title={session.session_name}>
+                        <div className="truncate flex-1" title={session.title}>
                           <span className="text-sm font-normal" dir="auto">
-                            {session.session_name}
+                            {session.title}
                             {isSelectingSession && currentSession?.session_id === session.session_id && (
                               <div className="ml-2 inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-current opacity-75"></div>
                             )}
@@ -345,7 +345,7 @@ const HistoryBlock: React.FC<HistoryBlockProps> = ({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onEditTitle(session.session_id, session.session_name);
+                                  onEditTitle(session.session_id, session.title);
                                   setShowDropdown(null);
                                 }}
                                 className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg flex items-center space-x-3 transition-colors min-h-[44px]"

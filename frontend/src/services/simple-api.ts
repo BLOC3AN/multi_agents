@@ -189,6 +189,7 @@ export async function getUserSessions(userId: string): Promise<{ success: boolea
     return {
       success: false,
       error: error.response?.data?.detail || error.message || 'Failed to get sessions',
+      data: [],
     };
   }
 }

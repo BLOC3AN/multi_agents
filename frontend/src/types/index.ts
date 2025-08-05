@@ -56,11 +56,11 @@ export interface ChatMessage {
 export interface ChatSession {
   session_id: string;
   user_id: string;
-  session_name: string;
+  title: string;
   created_at: string;
   updated_at: string;
-  message_count: number;
-  last_message_preview: string;
+  total_messages: number;
+  last_message_preview?: string;
   is_active: boolean;
 }
 

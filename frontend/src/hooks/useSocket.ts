@@ -103,15 +103,15 @@ export const useSocket = (props?: UseSocketProps): UseSocketReturn => {
       const session = {
         session_id: data.session_id,
         user_id: user?.user_id || '',
-        session_name: data.session_name || data.title || `Chat ${data.session_id.substring(0, 8)}`,
+        title: data.session_name || data.title || `Chat ${data.session_id.substring(0, 8)}`,
         created_at: data.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        message_count: 0,
+        total_messages: 0,
         last_message_preview: '',
         is_active: true,
       };
 
-      console.log('📝 Adding session with name:', session.session_name);
+      console.log('📝 Adding session with name:', session.title);
       addSession(session);
       setCurrentSession(session);
     });
@@ -121,15 +121,15 @@ export const useSocket = (props?: UseSocketProps): UseSocketReturn => {
       const session = {
         session_id: data.session_id,
         user_id: user?.user_id || '',
-        session_name: data.session_name || data.title || `Chat ${data.session_id.substring(0, 8)}`,
+        title: data.session_name || data.title || `Chat ${data.session_id.substring(0, 8)}`,
         created_at: data.created_at || new Date().toISOString(),
         updated_at: data.updated_at || new Date().toISOString(),
-        message_count: data.message_count || 0,
+        total_messages: data.total_messages || data.message_count || 0,
         last_message_preview: data.last_message_preview || '',
         is_active: true,
       };
 
-      console.log('🔗 Joined session with name:', session.session_name);
+      console.log('🔗 Joined session with name:', session.title);
       setCurrentSession(session);
     });
 
@@ -292,7 +292,7 @@ export const useSocket = (props?: UseSocketProps): UseSocketReturn => {
 
     const sessionData: any = {};
     if (sessionName && sessionName.trim()) {
-      sessionData.session_name = sessionName.trim();
+      sessionData.title = sessionName.trim();
       console.log('📝 Creating session with custom name:', sessionName.trim());
     } else {
       console.log('📝 Creating session with default name');

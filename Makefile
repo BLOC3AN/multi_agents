@@ -120,7 +120,7 @@ up-auth: ## Start Authentication API server
 	    echo "⚠️  Auth API already running (PID: $$(cat $(AUTH_PID_FILE)))"; \
 	else \
 	    echo "$$(date '+%Y-%m-%d %H:%M:%S') - Starting Auth API server..." >> logs/auth.log; \
-	    python3 auth_server.py >> logs/auth.log 2>&1 & echo $$! > $(AUTH_PID_FILE); \
+	    python3 auth_server_complete.py >> logs/auth.log 2>&1 & echo $$! > $(AUTH_PID_FILE); \
 	    echo "✅ Auth API started on port 8000 (PID: $$(cat $(AUTH_PID_FILE)))"; \
 	    echo "📋 Logs: tail -f logs/auth.log"; \
 	fi

@@ -26,7 +26,7 @@ const SessionsModal: React.FC<SessionsModalProps> = ({
   // Filter and sort sessions
   const filteredAndSortedSessions = useMemo(() => {
     let filtered = sessions.filter(session =>
-      session.session_name.toLowerCase().includes(searchTerm.toLowerCase())
+      session.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     switch (sortBy) {
@@ -35,7 +35,7 @@ const SessionsModal: React.FC<SessionsModalProps> = ({
       case 'oldest':
         return filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       case 'name':
-        return filtered.sort((a, b) => a.session_name.localeCompare(b.session_name));
+        return filtered.sort((a, b) => a.title.localeCompare(b.title));
       default:
         return filtered;
     }
@@ -147,7 +147,7 @@ const SessionsModal: React.FC<SessionsModalProps> = ({
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-gray-900 dark:text-white truncate">
-                          {session.session_name}
+                          {session.title}
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                           {formatDate(session.created_at)}
