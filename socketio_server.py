@@ -311,41 +311,39 @@ def process_message(sid, data):
         start_time = time.time()
 
         if MULTIAGENTS_AVAILABLE and agent_graph:
-            # Use multiagents system
-            print(f"🤖 Using multiagents system for: {message[:50]}...")
+            # Use simple conversation system
+            print(f"🤖 Using conversation agent for: {message[:50]}...")
 
-            # Create initial state
-            initial_state = create_initial_state(message)
+            try:
+                # Use the simple conversation system
+                from src.core.simple_graph import process_user_input
+                result = process_user_input(message, user_id=user_id, session_id=session_id)
 
-            # Process through agent graph
-            result = agent_graph.invoke(initial_state)
+                # Extract response
+                response_text = result.get('result', 'No response generated')
 
-            # Extract response
-            response_text = result.get('final_result', 'No response generated')
-
-            # Convert agent results to JSON-serializable format
-            agent_results = result.get('agent_results', {})
-            serializable_agent_results = {}
-
-            for key, value in agent_results.items():
-                if hasattr(value, 'to_dict'):
-                    serializable_agent_results[key] = value.to_dict()
-                elif hasattr(value, '__dict__'):
-                    serializable_agent_results[key] = str(value)
-                else:
-                    serializable_agent_results[key] = value
-
-            response = {
-                "status": "success",
-                "response": response_text,
-                "user_input": message,  # Include original user input
-                "timestamp": datetime.now().isoformat(),
-                "user_id": user_id,
-                "session_id": session_id,
-                "agent_responses": serializable_agent_results,
-                "metadata": result.get('metadata', {}),
-                "processing_mode": "multiagents"
-            }
+                response = {
+                    "status": "success",
+                    "response": response_text,
+                    "user_input": message,  # Include original user input
+                    "timestamp": datetime.now().isoformat(),
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "agent_responses": {"conversation": {"result": response_text}},
+                    "metadata": result.get('metadata', {}),
+                    "processing_mode": "single_agent"
+                }
+            except Exception as e:
+                print(f"❌ Error in conversation agent: {e}")
+                response = {
+                    "status": "error",
+                    "response": f"Xin lỗi, có lỗi xảy ra: {str(e)}",
+                    "user_input": message,
+                    "timestamp": datetime.now().isoformat(),
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "processing_mode": "error"
+                }
 
         else:
             # Fallback to simple echo response

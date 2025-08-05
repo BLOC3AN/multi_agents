@@ -1,17 +1,17 @@
 """
-Shared types and data structures for the multi-agent system.
+Shared types and data structures for the single conversation agent system.
 """
 from typing import TypedDict, Literal, Optional, Dict, List
 from dataclasses import dataclass
 
 
-# Intent types
-IntentType = Literal["math", "english", "poem"]
+# Legacy types kept for backward compatibility
+IntentType = Literal["general"]  # Simplified to single type
 
 
 @dataclass
 class IntentScore:
-    """Intent with confidence score."""
+    """Legacy intent score structure - kept for backward compatibility."""
     intent: IntentType
     confidence: float
     reasoning: Optional[str] = None
@@ -19,7 +19,7 @@ class IntentScore:
 
 @dataclass
 class AgentResult:
-    """Result from a single agent."""
+    """Legacy agent result structure - kept for backward compatibility."""
     agent_name: str
     intent: IntentType
     success: bool
@@ -29,19 +29,18 @@ class AgentResult:
 
 
 class AgentState(TypedDict):
-    """Enhanced state structure supporting multi-intent parallel processing."""
+    """Simplified state structure for single conversation agent."""
     input: str
-    # Multi-intent support
+    # Legacy fields kept for backward compatibility
     detected_intents: Optional[List[IntentScore]]
     primary_intent: Optional[IntentType]
-    # Parallel results
     agent_results: Optional[Dict[str, AgentResult]]
-    # Final aggregated result
+    # Main result field
     final_result: Optional[str]
     # Error handling
     errors: Optional[List[str]]
     # Metadata
-    processing_mode: Optional[Literal["single", "parallel"]]
+    processing_mode: Optional[Literal["single"]]  # Only single mode now
     execution_summary: Optional[Dict[str, any]]
     # Context support
     conversation_context: Optional[List[Dict[str, any]]]
@@ -56,8 +55,9 @@ class AgentResponse(TypedDict):
     error: Optional[str]
 
 
+# Legacy config type - no longer used but kept for compatibility
 class ParallelExecutionConfig(TypedDict):
-    """Configuration for parallel execution."""
+    """Legacy configuration for parallel execution - no longer used."""
     max_concurrent_agents: int
     timeout_seconds: float
     confidence_threshold: float

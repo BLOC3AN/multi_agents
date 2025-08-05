@@ -230,40 +230,44 @@ async def metrics():
 @app.post("/process", response_model=ProcessResponse)
 async def process_input(request: ProcessRequest):
     """
-    Process user input through the multi-agent system.
-    
-    Supports both single and parallel processing modes based on detected intents.
+    Process user input through the simple conversation system.
     """
-    if not agent_graph:
-        raise HTTPException(status_code=503, detail="Agent graph not initialized")
-    
     start_time = time.time()
-    
+
     try:
-        # Create initial state
-        initial_state = create_initial_state(request.input)
-        
-        # Process through the graph
-        result_state = agent_graph.invoke(initial_state)
-        
+        # Use the simple conversation system
+        from src.core.simple_graph import process_user_input
+        result = process_user_input(request.input)
+
         processing_time = time.time() - start_time
-        
-        # Convert to response format
-        response = convert_agent_state_to_response(result_state, processing_time)
-        
-        logging.info(f"Processed request in {processing_time:.2f}s - Mode: {response.processing_mode}")
-        
+
+        # Convert to response format for backward compatibility
+        response = ProcessResponse(
+            success=result.get("success", False),
+            input=request.input,
+            primary_intent=None,  # No longer used in single agent system
+            processing_mode="single",
+            detected_intents=None,  # No longer used
+            agent_results=None,  # No longer used
+            final_result=result.get("result"),
+            execution_summary=result.get("metadata", {}),
+            errors=[result.get("error")] if result.get("error") else None,
+            processing_time=processing_time
+        )
+
+        logging.info(f"Processed request in {processing_time:.2f}s - Single agent mode")
+
         return response
-        
+
     except Exception as e:
         processing_time = time.time() - start_time
         logging.error(f"Error processing request: {e}")
-        
+
         return ProcessResponse(
             success=False,
             input=request.input,
             primary_intent=None,
-            processing_mode=None,
+            processing_mode="single",
             detected_intents=None,
             agent_results=None,
             final_result=None,
@@ -275,11 +279,11 @@ async def process_input(request: ProcessRequest):
 
 @app.get("/agents", response_model=Dict[str, List[str]])
 async def get_available_agents():
-    """Get information about available agents and intents."""
+    """Get information about available agents."""
     return {
-        "available_intents": ["math", "english", "poem"],
-        "agents": ["MathAgent", "EnglishAgent", "PoemAgent"],
-        "processing_modes": ["single", "parallel"]
+        "available_intents": ["general"],  # Single agent handles all types
+        "agents": ["ConversationAgent"],
+        "processing_modes": ["single"]
     }
 
 

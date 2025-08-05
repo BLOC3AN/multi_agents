@@ -24,7 +24,7 @@ def setup_logging():
 
 def process_input(user_input: str) -> dict:
     """
-    Process user input through the multi-agent system.
+    Process user input through the simple conversation system.
 
     Args:
         user_input: The user's input text
@@ -33,16 +33,21 @@ def process_input(user_input: str) -> dict:
         Dictionary containing the processing result
     """
     try:
-        # Create the enhanced parallel agent graph
-        graph = create_agent_graph()
+        # Use the simple conversation system
+        from src.core.simple_graph import process_user_input
+        result = process_user_input(user_input)
 
-        # Create initial state for enhanced system
-        initial_state = create_initial_state(user_input)
-
-        # Process through the graph
-        final_state = graph.invoke(initial_state)
-
-        return final_state
+        # Convert to the expected format for backward compatibility
+        return {
+            "input": user_input,
+            "detected_intents": None,
+            "primary_intent": None,
+            "agent_results": None,
+            "final_result": result.get("result"),
+            "errors": [result.get("error")] if result.get("error") else None,
+            "processing_mode": "single",
+            "execution_summary": result.get("metadata", {})
+        }
 
     except Exception as e:
         logging.error(f"Error processing input: {str(e)}")

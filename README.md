@@ -1,61 +1,55 @@
-# Multi-Agent System 🚀
+# AI Conversation System 🚀
 
-**High-Performance AI Multi-Agent System with FastAPI + HTMX GUI** with Parallel Execution
+**High-Performance AI Conversation System with React.js Frontend**
 
-A clean and intelligent multi-agent system built with LangGraph that supports both single and parallel agent execution based on multi-intent detection.
+A clean and intelligent single-agent conversation system that handles all types of user requests through one unified AI agent.
 
 ## 🚀 Key Features
 
-### 🧠 **Intelligent Intent Detection**
-- **LLM-Powered Classification**: Uses AI to detect user intents instead of rule-based matching
-- **Multi-Intent Support**: Automatically detects multiple intents in a single input
-- **Confidence Scoring**: Each intent comes with confidence scores for better decision making
+### 🤖 **Unified Conversation Agent**
+- **Single Agent Architecture**: One intelligent agent handles all types of requests
+- **Multi-Capability**: Handles math, explanations, creative writing, and general conversation
+- **Context Awareness**: Maintains conversation context for better responses
 
-### ⚡ **Parallel Execution**
-- **Automatic Mode Selection**: Switches between single and parallel mode based on detected intents
-- **Concurrent Processing**: Runs multiple agents simultaneously using ThreadPoolExecutor
-- **Smart Result Aggregation**: LLM intelligently combines results from multiple agents
+### 🎯 **Versatile Capabilities**
+- **Mathematical Problem Solving**: Solves equations, calculations, and math problems
+- **Concept Explanation**: Provides clear explanations and answers questions
+- **Creative Writing**: Creates poetry, stories, and creative content
+- **General Conversation**: Handles everyday questions and discussions
 
-### 🎯 **Specialized Agents**
-- **Math Agent**: Solves mathematical problems and equations
-- **English Agent**: Explains concepts, provides definitions, and answers questions
-- **Poem Agent**: Creates poetry and creative writing based on input
-
-### 🏗️ **Clean Architecture**
-- **Modular Design**: Separation of concerns with clear component boundaries
-- **Dependency Injection**: Flexible and testable architecture
-- **Factory Patterns**: Easy extensibility for new LLM providers and agents
-- **Error Resilience**: Comprehensive error handling and fallback mechanisms
+### 🏗️ **Modern Architecture**
+- **React.js Frontend**: Modern, responsive user interface
+- **Real-time Communication**: WebSocket support for instant responses
+- **Authentication System**: Secure user management and sessions
+- **Clean Codebase**: Simplified, maintainable architecture
 
 ## 🏛️ Architecture
 
-### **Enhanced Parallel Processing Flow**
+### **Simple Conversation Flow**
 ```
-Input → Intent Classification → Mode Selection → Agent Execution → Result Aggregation → Output
-         (Multi-Intent AI)      (Single/Parallel)   (Concurrent)      (LLM-Powered)
+Input → Conversation Agent → LLM Processing → Response
+        (Unified Handler)    (Context-Aware)   (Direct Output)
 ```
 
 ### **Project Structure**
 ```
 src/
 ├── core/                      # Core functionality
-│   ├── types.py              # Enhanced types with multi-intent support
-│   ├── base_agent.py         # Base agent class with dependency injection
-│   ├── intent_classifier.py  # LLM-powered multi-intent classification
-│   ├── parallel_orchestrator.py  # Parallel execution coordinator
-│   └── result_aggregator.py  # Intelligent result combination
-├── agents/                    # Specialized agents
-│   ├── math_agent.py         # Mathematical problem solving
-│   ├── english_agent.py      # Concept explanations and Q&A
-│   └── poem_agent.py         # Creative writing and poetry
+│   ├── types.py              # Type definitions
+│   ├── base_agent.py         # Base agent class
+│   └── simple_graph.py       # Simple conversation graph
+├── agents/                    # Conversation agent
+│   └── conversation_agent.py # Unified conversation handler
 ├── llms/                      # LLM provider abstraction
 │   ├── llm_factory.py        # Factory pattern for LLM creation
 │   ├── gemini.py             # Google Gemini provider
 │   └── openai.py             # OpenAI provider
 ├── config/                    # Configuration management
 │   └── settings.py           # Environment-based settings
-└── tests/                     # Comprehensive test suite
-    ├── test_intent_classifier.py
+├── services/                  # Additional services
+│   ├── file_embedding_service.py
+│   └── data_sync_service.py
+└── tests/                     # Test suite
     └── test_llm_factory.py
 ```
 
